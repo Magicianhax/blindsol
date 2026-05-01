@@ -9,4 +9,9 @@ export {
   type LoginResponse,
   MagicBlockApiError,
 } from "./types.js";
-export type { MagicBlockClientConfig } from "./client.js";
+export type {
+  DepositRequest,
+  MagicBlockClientConfig,
+  TransferRequest,
+  UnsignedTransactionResponse,
+} from "./client.js";

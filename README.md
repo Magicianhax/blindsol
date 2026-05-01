@@ -39,10 +39,30 @@ POSTGRES DB        → posts, comments, reactions (all indexed by anon_id only)
 ```bash
 pnpm install
 cp .env.example .env
-# fill in DATABASE_URL, PRIVY_APP_ID, PRIVY_APP_SECRET, ANTHROPIC_API_KEY
+# fill in DATABASE_URL (Neon), PER_DEV_SECRET (or autogen), and optionally
+# the MagicBlock stake-escrow vars (see below)
 pnpm --filter @blindsol/api db:migrate
-pnpm dev
+pnpm dev   # API on :3001, web on :3000
 ```
+
+### Real MagicBlock stake escrow (Phase 10a)
+
+When enabled, every successful `POST /posts` triggers a real private USDC
+transfer through MagicBlock's PER, locking a stake bond on Solana mainnet beta.
+
+```bash
+# 1. Generate house + stake-pool keypairs
+cd apps/api && npx tsx scripts/gen-house-wallet.ts
+# 2. Paste the printed lines into .env
+# 3. Fund the printed HOUSE_WALLET_PUBKEY:
+#      ~0.05 SOL  (Solana tx fees)
+#      ~5  USDC  (~50 posts at 0.1 USDC each)
+# 4. Set MAGICBLOCK_ENABLED=true
+# 5. Restart the API. /health will report `magicblock: "enabled"`.
+```
+
+When `MAGICBLOCK_ENABLED=false` (the default) the API still works end-to-end —
+posts are recorded with a stub stake amount but no USDC moves.
 
 ## Status
 

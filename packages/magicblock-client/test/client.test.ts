@@ -126,3 +126,51 @@ describe("MagicBlockClient balance queries", () => {
     expect(privateCall.headers.authorization).toBe("Bearer tok");
   });
 });
+
+describe("MagicBlockClient transfer & deposit", () => {
+  it("builds an unsigned private transfer with sender, mint, recipient, amount", async () => {
+    const signer = KeypairSigner.generate();
+    const senderPub = await signer.publicKey();
+    const { stub, calls } = makeFetchStub([
+      { match: /\/v1\/spl\/challenge/, response: { challenge: "c" } },
+      { match: /\/v1\/spl\/login/, response: { token: "tok" } },
+      { match: /\/v1\/spl\/transfer/, response: { transaction: "BASE64_UNSIGNED_TX" } },
+    ]);
+    const client = new MagicBlockClient({ apiBase: API_BASE, signer, fetchImpl: stub });
+
+    const result = await client.buildTransfer({
+      mint: USDC,
+      recipient: "RECIPIENT_PUBKEY_BASE58",
+      amount: "100000",
+    });
+
+    expect(result.transaction).toBe("BASE64_UNSIGNED_TX");
+    const transferCall = calls.find((c) => c.url.includes("/v1/spl/transfer"))!;
+    expect(transferCall.method).toBe("POST");
+    expect(transferCall.headers.authorization).toBe("Bearer tok");
+    expect(transferCall.body).toMatchObject({
+      mint: USDC,
+      sender: senderPub,
+      recipient: "RECIPIENT_PUBKEY_BASE58",
+      amount: "100000",
+      private: true,
+    });
+  });
+
+  it("builds an unsigned deposit transaction", async () => {
+    const signer = KeypairSigner.generate();
+    const senderPub = await signer.publicKey();
+    const { stub, calls } = makeFetchStub([
+      { match: /\/v1\/spl\/challenge/, response: { challenge: "c" } },
+      { match: /\/v1\/spl\/login/, response: { token: "tok" } },
+      { match: /\/v1\/spl\/deposit/, response: { transaction: "BASE64_DEPOSIT_TX" } },
+    ]);
+    const client = new MagicBlockClient({ apiBase: API_BASE, signer, fetchImpl: stub });
+
+    const result = await client.buildDeposit({ mint: USDC, amount: "5000000" });
+
+    expect(result.transaction).toBe("BASE64_DEPOSIT_TX");
+    const depositCall = calls.find((c) => c.url.includes("/v1/spl/deposit"))!;
+    expect(depositCall.body).toMatchObject({ mint: USDC, sender: senderPub, amount: "5000000" });
+  });
+});

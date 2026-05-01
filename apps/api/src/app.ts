@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import { type DB } from "./db/index.js";
 import type { BadgeIssuer } from "./per/issuer.js";
+import type { MagicBlockStakeService } from "./magicblock/stake-service.js";
 import { badgesRouter } from "./routes/badges.js";
 import { postsRouter } from "./routes/posts.js";
 
@@ -16,6 +17,7 @@ export interface AppDeps {
   badgeIssuer?: BadgeIssuer;
   perPubkeyBase58?: string;
   perSecretKey?: Uint8Array;
+  stakeService?: MagicBlockStakeService;
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -24,7 +26,11 @@ export function createApp(deps: AppDeps): Express {
   app.disable("x-powered-by");
 
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, service: "blindsol-api" });
+    res.json({
+      ok: true,
+      service: "blindsol-api",
+      magicblock: deps.stakeService ? "enabled" : "stubbed",
+    });
   });
 
   if (deps.badgeIssuer) {
@@ -38,6 +44,7 @@ export function createApp(deps: AppDeps): Express {
         db: deps.db,
         perPubkeyBase58: deps.perPubkeyBase58,
         ...(deps.perSecretKey ? { perSecretKey: deps.perSecretKey } : {}),
+        ...(deps.stakeService ? { stakeService: deps.stakeService } : {}),
       }),
     );
   }

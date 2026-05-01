@@ -6,6 +6,7 @@ import { deriveAuthorAnonId, sha256Hex } from "../per/anon.js";
 import { signAttestationForDev } from "../attestation.js";
 import { authBearerBadge } from "../per/session.js";
 import { randomUUID } from "node:crypto";
+import type { MagicBlockStakeService } from "../magicblock/stake-service.js";
 
 export interface PostsRouterDeps {
   db: DB;
@@ -15,6 +16,11 @@ export interface PostsRouterDeps {
    * and the attestation is supplied by the client after a round-trip to the TEE.
    */
   perSecretKey?: Uint8Array;
+  /**
+   * Optional. When set, every successful POST /posts triggers a real private
+   * USDC transfer through MagicBlock's PER as the stake bond.
+   */
+  stakeService?: MagicBlockStakeService;
 }
 
 const createPostBody = z.object({
@@ -123,6 +129,24 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
         requireSecret(deps.perSecretKey),
       );
 
+      // Lock a stake bond via MagicBlock private transfer if configured.
+      // This is real USDC moving on Solana mainnet beta + private settlement
+      // through the PER. We surface failures as 502 so the client knows the
+      // post wasn't recorded.
+      let stakeReceipt: { signature: string; amountRaw: string } | undefined;
+      if (deps.stakeService) {
+        try {
+          const r = await deps.stakeService.lockStake();
+          stakeReceipt = { signature: r.signature, amountRaw: r.amountRaw };
+        } catch (err) {
+          res.status(502).json({
+            error: "stake_failed",
+            reason: (err as Error).message,
+          });
+          return;
+        }
+      }
+
       const [inserted] = await deps.db
         .insert(schema.posts)
         .values({
@@ -132,12 +156,12 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
           content: parsed.data.content,
           contentHash,
           perAttestation: attestation.signature,
-          stakeLamports: MIN_STAKE_LAMPORTS,
+          stakeLamports: stakeReceipt ? BigInt(stakeReceipt.amountRaw) : MIN_STAKE_LAMPORTS,
         })
         .returning();
       if (!inserted) throw new Error("failed to insert post");
 
-      res.status(201).json({ post: inserted });
+      res.status(201).json({ post: inserted, stake: stakeReceipt });
     } catch (err) {
       next(err);
     }

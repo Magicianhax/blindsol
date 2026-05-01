@@ -13,6 +13,31 @@ export interface MagicBlockClientConfig {
   fetchImpl?: typeof fetch;
 }
 
+export interface UnsignedTransactionResponse {
+  /** Base64-encoded serialized unsigned Solana transaction. */
+  transaction: string;
+  /** Optional metadata returned by the API. */
+  meta?: Record<string, unknown>;
+}
+
+export interface TransferRequest {
+  mint: string;
+  /** Base58 recipient pubkey. */
+  recipient: string;
+  /** Amount in raw token units (e.g. for 6-decimal USDC, 1.0 USDC = "1000000"). */
+  amount: string;
+  /** When true, the transfer settles inside the PER and leaves no on-chain link. */
+  private?: boolean;
+  /** Optional client-side memo. */
+  memo?: string;
+}
+
+export interface DepositRequest {
+  mint: string;
+  /** Amount in raw token units to move from base chain into PER. */
+  amount: string;
+}
+
 const DEFAULT_API_BASE = "https://payments.magicblock.app";
 
 export class MagicBlockClient {
@@ -60,6 +85,39 @@ export class MagicBlockClient {
     const session = await this.login();
     return this.getJson<BalanceResult>(
       `/v1/spl/private-balance?mint=${encodeURIComponent(mint)}&address=${encodeURIComponent(session.pubkey)}`,
+      { Authorization: `Bearer ${session.bearerToken}` },
+    );
+  }
+
+  /**
+   * Build an unsigned deposit transaction (base chain → PER).
+   * The caller must sign and submit it on Solana.
+   */
+  async buildDeposit(req: DepositRequest): Promise<UnsignedTransactionResponse> {
+    const session = await this.login();
+    return this.postJson<UnsignedTransactionResponse>(
+      "/v1/spl/deposit",
+      { mint: req.mint, amount: req.amount, sender: session.pubkey },
+      { Authorization: `Bearer ${session.bearerToken}` },
+    );
+  }
+
+  /**
+   * Build an unsigned transfer transaction. With `private: true` the transfer
+   * is settled inside the PER (no traceable on-chain link).
+   */
+  async buildTransfer(req: TransferRequest): Promise<UnsignedTransactionResponse> {
+    const session = await this.login();
+    return this.postJson<UnsignedTransactionResponse>(
+      "/v1/spl/transfer",
+      {
+        mint: req.mint,
+        sender: session.pubkey,
+        recipient: req.recipient,
+        amount: req.amount,
+        private: req.private ?? true,
+        ...(req.memo ? { memo: req.memo } : {}),
+      },
       { Authorization: `Bearer ${session.bearerToken}` },
     );
   }
