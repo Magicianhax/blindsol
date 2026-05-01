@@ -1,8 +1,8 @@
 {
-  "name": "agentpay",
+  "name": "blindsol",
   "version": "0.0.0",
   "private": true,
-  "description": "Private x402 payment rails for AI agents, powered by MagicBlock.",
+  "description": "Anonymous gossip platform for crypto. Verified holders post anonymously, hands kept private inside MagicBlock's TEE.",
   "license": "MIT",
   "packageManager": "pnpm@9.12.0",
   "engines": {

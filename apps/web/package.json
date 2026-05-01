@@ -1,10 +1,10 @@
 {
-  "name": "@agentpay/web",
+  "name": "@blindsol/web",
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "echo 'web dashboard scaffolds in Phase 6 — fork private-payments-demo'",
-    "build": "echo 'web dashboard scaffolds in Phase 6'",
+    "dev": "echo 'Phase 9 — web frontend not yet scaffolded'",
+    "build": "echo 'Phase 9 — web frontend not yet scaffolded'",
     "test": "echo 'no tests yet'",
     "typecheck": "echo 'no ts yet'"
   }

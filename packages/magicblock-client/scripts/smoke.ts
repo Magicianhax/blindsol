@@ -2,7 +2,7 @@
  * Smoke test against the live MagicBlock Private Payments API.
  *
  * Usage:
- *   AGENT_WALLET_SECRET=<base58> pnpm --filter @agentpay/magicblock-client smoke
+ *   AGENT_WALLET_SECRET=<base58> pnpm --filter @blindsol/magicblock-client smoke
  *
  * If AGENT_WALLET_SECRET is not set, generates a throwaway keypair and runs
  * only the auth flow (the wallet will have no balance to query).

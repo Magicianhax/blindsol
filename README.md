@@ -1,44 +1,46 @@
-# AgentPay
+# BlindSol
 
-Private x402 payment rails for AI agents, powered by [MagicBlock](https://docs.magicblock.gg/) Private Payments API.
+Anonymous gossip for crypto. Verified holders post anonymously. The wallet → post link is sealed inside MagicBlock's TEE and never leaves.
 
 > **Submission**: Colosseum Frontier Hackathon — Privacy Track (MagicBlock).
 
 ## Why
 
-[x402](https://x402.org) is the emerging HTTP protocol for AI agents to pay each other for API access. On Solana today, every settlement is public — competitors can watch an agent's spend, infer its strategy, and frontrun it. **AgentPay makes x402 settlements private by default**, using MagicBlock's Private Ephemeral Rollup so there is no traceable on-chain link between agent and service.
+[Blind](https://www.teamblind.com/) has 7M+ users because anonymous-but-verified communities work. Crypto Twitter has no equivalent. **BlindSol** lets you prove something about yourself (you hold $JUP, you work at Anthropic, you're a Solana Foundation employee) and post anonymously under that badge. Readers verify the claim is real; nobody — not even our DB — can trace the post back to your wallet.
 
-## Architecture
+## How privacy actually works
+
+Three layers, each holds only what it should:
 
 ```
-┌─────────┐   1. GET /api          ┌──────────┐
-│  Agent  │ ─────────────────────▶ │  Proxy   │ ──▶ /v1/spl/private-balance
-│ (Claude)│ ◀─ 2. 402 + challenge ─│ (x402)   │
-│         │                        │          │
-│         │   3. private settle    │          │
-│         │ ─── via /v1/mcp ─────▶ MagicBlock PER (TEE)
-│         │                        │          │
-│         │   4. retry with proof  │          │ 5. forward
-│         │ ─────────────────────▶ │          │ ──▶ Demo API
-└─────────┘ ◀─ 6. 200 + data ──── └──────────┘
+SOLANA MAINNET     → badge issuances (public),  stake escrow accts
+MAGICBLOCK PER     → wallet ↔ anon_id mapping (encrypted, sealed in TEE)
+POSTGRES DB        → posts, comments, reactions (all indexed by anon_id only)
 ```
+
+- Postgres has no wallet column anywhere
+- Solana sees badges (coarse — "wallet X is a verified $JUP holder") but never specific posts
+- The wallet → anon_id derivation runs only inside the TEE
+- DB leak ≠ identity leak
 
 ## Apps
 
 | Path | Purpose |
 |---|---|
-| `apps/proxy` | x402 reverse proxy that gates any API behind private USDC payment |
-| `apps/demo-api` | Toy "premium oracle" priced at 0.01 USDC per call |
-| `apps/agent` | Claude agent that consumes the API, paying privately via MCP |
-| `apps/web` | Live dashboard showing private settlements |
-| `packages/magicblock-client` | Shared TS client for MagicBlock Private Payments API |
+| `apps/api` | Express + Postgres. Read endpoints, post submission, attestation verification |
+| `apps/agent` | Claude moderation bot — flags spam, summarizes threads |
+| `apps/web` | Next.js. Wallet connect, badge claim, feed, composer, threads |
+| `packages/magicblock-client` | Shared TS client for MagicBlock's Private Payments API + WalletSigner abstraction |
+| `programs/badge-program` | Anchor program: badge NFT issuance |
+| `programs/stake-escrow` | Anchor program: anti-spam stake bonds |
 
 ## Getting started
 
 ```bash
 pnpm install
 cp .env.example .env
-# fill in AGENT_WALLET_SECRET, MERCHANT_WALLET_SECRET, ANTHROPIC_API_KEY
+# fill in DATABASE_URL, PRIVY_APP_ID, PRIVY_APP_SECRET, ANTHROPIC_API_KEY
+pnpm --filter @blindsol/api db:migrate
 pnpm dev
 ```
 

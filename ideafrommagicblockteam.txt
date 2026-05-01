@@ -1,0 +1,48 @@
+MagicBlock RFPs
+Explore open ideas on what you can build with MagicBlock. Take an idea and start building today!
+If you’d like to join our Incubator program feel free to apply here: 
+
+# Private MPP
+
+Resources:
+
+https://docs.magicblock.gg/pages/private-ephemeral-rollups-pers/api-reference/per/introduction
+
+# Undercollateralized Credit Marketplace
+
+Most DeFi lending today requires full collateral, unlike traditional credit markets. What if an onchain marketplace enabled undercollateralized loans? 
+
+Borrowers could link identity or financial data, lenders could extend credit lines, and pools could spread risk across tranches. 
+
+Ephemeral Rollups could process private credit data safely, generating onchain credit scores without exposing sensitive details. If built, this could open a trillion-dollar opportunity by bringing real credit markets to DeFi.
+
+Private Forex Payroll
+Swap USD ↔ SGD, EUR + pay to private wallet
+Employer who pays employees who receive salary in SGD, EUR, …
+Private Pool + Private Payement
+Empty
+Private, fast, zero fees
+Using Private API + Pool
+Empty
+Available
+DeFi
+Payments
+Jonas Chen
+Empty
+
+
+Private Sealed-Bid Auction
+Agents submit sealed bids for resources, data, or services. Winner selected privately inside PER. Losing bids never revealed.
+AI agent builders, procurement protocols, any marketplace where competitive bidding leaks pricing power
+Multi-item auctions, reserve prices, reputation-weighted scoring, batch settlement, recurring auction schedules
+Painkiller: Open bidding lets agents game each other and extract max price | Vitamin: Enables fair price discovery for any agent-to-agent market
+  • Honest pricing. Sealed bids prevent agents from undercutting.
+  • No information leakage. Losing bids stay private
+  • Foundation for fair agent commerce at scale
+Agent posts a request (need compute, need data, need a service). Competing agents submit sealed bids → ER spins up → opens all bids inside TEE → selects winner by rules (lowest price, best reputation, fastest delivery) → publishes winner + settlement to L1 → ER winds down. Losing bids are never revealed.
+Encrypted bid submission + PER auction logic with Private Payment API
+Available
+Payments
+ai
+Vincent Chan
+Empty

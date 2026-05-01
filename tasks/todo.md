@@ -1,54 +1,98 @@
-# AgentPay — Implementation Plan
+# BlindSol — Implementation Plan
 
-> Private x402 payment rails for AI agents, powered by MagicBlock's Private Payments API.
-> Submission target: Colosseum Privacy Track (deadline 2026-05-27).
-
-## Decisions locked in
-- **Wallet model**: server-held keypair for the demo. Document production migration path (user-provided seed) in README.
-- **Network**: MagicBlock Private Payments API mainnet beta. Budget ~$5 USDC for end-to-end demo flows.
-- **Repo**: pnpm workspaces.
+> Anonymous gossip for crypto. Verified holders post anonymously, the wallet → anon_id link sealed in MagicBlock's TEE.
+> Submission target: Colosseum Frontier Hackathon — Privacy Track. Deadline 2026-05-27.
 
 ## Architecture
+
 ```
-agentpay/
+┌─────────────────────────────────────────────────────────────────┐
+│  SOLANA MAINNET                                                 │
+│  • badge NFTs (verifies "wallet X holds verified $JUP" status)  │
+│  • stake escrow accounts (anti-spam bonds)                      │
+│  • Merkle root of post integrity (periodic)                     │
+└─────────────────────────────────────────────────────────────────┘
+                           ▲   commit/settle
+                           │
+┌─────────────────────────────────────────────────────────────────┐
+│  MAGICBLOCK PER (TEE)                                           │
+│  • wallet ↔ anon_id mapping (encrypted, never leaves)           │
+│  • HMAC secret used to derive anon_ids                          │
+│  • signs post-attestations: "valid badge holder posted X"       │
+└─────────────────────────────────────────────────────────────────┘
+                           ▲   attestation
+                           │
+┌─────────────────────────────────────────────────────────────────┐
+│  POSTGRES DB                                                    │
+│  • posts, comments, reactions — indexed by anon_id only         │
+│  • zero wallet info anywhere                                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Repo layout
+
+```
+blindsol/
 ├── apps/
-│   ├── proxy/        x402 reverse proxy (Express + TS)
-│   ├── demo-api/     toy "premium oracle" priced at 0.01 USDC/call
-│   ├── agent/        Claude agent that pays via MagicBlock MCP
-│   └── web/          Next.js dashboard (fork of private-payments-demo)
-└── packages/
-    └── magicblock-client/   shared lib: auth + balance + transfer
+│   ├── api/              Express + Postgres + Drizzle ORM
+│   ├── agent/            Claude moderation bot
+│   └── web/              Next.js (wallet, badge claim, feed, composer)
+├── packages/
+│   └── magicblock-client/   reusable from previous direction
+└── programs/
+    ├── badge-program/    Anchor: badge NFT issuance
+    └── stake-escrow/     Anchor: anti-spam bonds
 ```
 
-## Phases (10 days, ends 2026-05-11; submission window holds until 05-27)
+## Decisions locked in
 
-- [x] Phase 0 — research & spec ✅ (this doc)
-- [ ] Phase 1 — scaffold monorepo (task #1)
-- [ ] Phase 2 — MagicBlock client lib + smoke test against mainnet beta (task #2)
-- [ ] Phase 3 — x402 proxy middleware, TDD (task #3)
-- [ ] Phase 4 — demo paid API (task #4)
-- [ ] Phase 5 — Claude agent + MCP integration (task #5)
-- [ ] Phase 6 — web dashboard (task #6)
-- [ ] Phase 7 — mainnet deploy + smoke (task #7)
-- [ ] Phase 8 — demo video (task #8)
-- [ ] Phase 9 — README, polish, submit (task #9)
+- **Wallet model**: Privy server wallets (production-grade). KeypairSigner fallback for dev.
+- **Network**: MagicBlock Private Payments API mainnet beta + Solana mainnet beta.
+- **DB**: Postgres + Drizzle ORM (type-safe, fast). Local: Docker. Prod: Neon.
+- **Repo**: pnpm workspaces (kept).
 
-## API surface in scope
-| Endpoint | Used by | Purpose |
+## Phases (10 days, target ship by 2026-05-11)
+
+- [x] Phase 0 — pivot to BlindSol, kill old plan
+- [x] Phase 1 — scaffold (existing — kept)
+- [x] Phase 2 — magicblock-client (existing — kept, 100% reusable)
+- [ ] Phase 3 — restructure monorepo (task #10) ← *in progress*
+- [ ] Phase 4 — Postgres schema + Drizzle migrations (task #11)
+- [ ] Phase 5 — API scaffolding + read endpoints (task #12)
+- [ ] Phase 6 — Badge issuance flow (task #13)
+- [ ] Phase 7 — Post submission with PER attestation (task #14)
+- [ ] Phase 8 — Reactions + threaded comments (task #15)
+- [ ] Phase 9 — Web feed + composer (task #16)
+- [ ] Phase 10 — Moderation agent + mainnet deploy (task #17)
+- [ ] Phase 11 — Demo video + submit (task #18)
+
+## API surface (incoming)
+
+| Endpoint | Method | Purpose |
 |---|---|---|
-| GET /v1/spl/challenge | client lib | wallet auth challenge |
-| POST /v1/spl/login | client lib | bearer token |
-| GET /v1/spl/balance | proxy, agent | base-chain USDC balance |
-| GET /v1/spl/private-balance | proxy | settlement verification |
-| POST /v1/spl/deposit | agent | onboard USDC into PER |
-| POST /v1/spl/transfer | agent | private payment to merchant |
-| POST /v1/spl/withdraw | merchant (later) | cash-out path |
-| GET /v1/mcp | agent | MCP-native settlement |
+| `/health` | GET | health check |
+| `/posts` | GET | list posts (filter by badge_kind, paginate) |
+| `/posts/:id` | GET | post + comments thread |
+| `/posts` | POST | submit post (requires PER attestation) |
+| `/posts/:id/comments` | POST | reply to post |
+| `/posts/:id/reactions` | POST | upvote / downvote / spam-flag |
+| `/badges/claim` | POST | start badge claim flow |
+| `/badges/:id` | GET | badge details |
+
+## DB schema (preview)
+
+- `badges (id, kind, on_chain_pubkey, issued_at)` — no wallet column
+- `posts (id, author_anon_id, badge_kind, content, content_hash, per_attestation, stake_lamports, created_at)`
+- `comments (id, post_id, parent_id, author_anon_id, badge_kind, content, per_attestation, created_at)`
+- `reactions (id, post_id, reactor_anon_id, kind, per_attestation, created_at)`
 
 ## Risks & mitigations
-- **Mainnet beta quirks not in docs** → keep one full day in buffer (Phase 7 day) for deploy debugging.
-- **MCP endpoint behavior** → if /v1/mcp doesn't expose the verbs we need, fall back to direct REST calls from the agent. Demo still works.
-- **3-min video discipline** → script it on day 8 morning, record afternoon. Don't ship features after day 7.
+
+- **PER program complexity** — writing real Anchor + ER delegation is the hard part. Mitigation: Phase 6 ships with mock attestations issued by a dev keypair, real PER integration follows in Phase 10.
+- **Privy SDK churn** — already abstracted behind `WalletSigner`, swap is one config change.
+- **Postgres setup friction on Windows** — use Docker compose locally; fall back to Neon free tier if Docker is painful.
+- **3-min video discipline** — script day 8 morning, record afternoon.
 
 ## Review section
-_To be filled in after each phase._
+
+_Filled in after each phase._
