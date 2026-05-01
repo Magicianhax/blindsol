@@ -28,7 +28,12 @@ const badgeIssuer = new BadgeIssuer({
   perPubkeyBase58: perKeys.publicKeyBase58,
 });
 
-const app = createApp({ db, badgeIssuer });
+const app = createApp({
+  db,
+  badgeIssuer,
+  perPubkeyBase58: perKeys.publicKeyBase58,
+  perSecretKey: perKeys.secretKey,
+});
 
 app.listen(port, () => {
   console.log(`[api] BlindSol API listening on :${port}`);

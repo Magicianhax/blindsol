@@ -1,8 +1,8 @@
 import express, { type Express } from "express";
-import { desc, eq } from "drizzle-orm";
-import { type DB, schema } from "./db/index.js";
+import { type DB } from "./db/index.js";
 import type { BadgeIssuer } from "./per/issuer.js";
 import { badgesRouter } from "./routes/badges.js";
+import { postsRouter } from "./routes/posts.js";
 
 // Bigint columns (e.g. stake_lamports) come back from Postgres as JS bigints.
 // JSON.stringify refuses bigints by default; serialize them as strings so
@@ -14,6 +14,8 @@ import { badgesRouter } from "./routes/badges.js";
 export interface AppDeps {
   db: DB;
   badgeIssuer?: BadgeIssuer;
+  perPubkeyBase58?: string;
+  perSecretKey?: Uint8Array;
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -21,59 +23,24 @@ export function createApp(deps: AppDeps): Express {
   app.use(express.json({ limit: "32kb" }));
   app.disable("x-powered-by");
 
-  if (deps.badgeIssuer) {
-    app.use("/badges", badgesRouter({ issuer: deps.badgeIssuer, db: deps.db }));
-  }
-
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "blindsol-api" });
   });
 
-  app.get("/posts", async (req, res, next) => {
-    try {
-      const badge = typeof req.query.badge === "string" ? req.query.badge : undefined;
-      const limit = Math.min(Number(req.query.limit ?? 50) || 50, 100);
+  if (deps.badgeIssuer) {
+    app.use("/badges", badgesRouter({ issuer: deps.badgeIssuer, db: deps.db }));
+  }
 
-      const rows = badge
-        ? await deps.db
-            .select()
-            .from(schema.posts)
-            .where(eq(schema.posts.badgeKind, badge))
-            .orderBy(desc(schema.posts.createdAt))
-            .limit(limit)
-        : await deps.db
-            .select()
-            .from(schema.posts)
-            .orderBy(desc(schema.posts.createdAt))
-            .limit(limit);
-
-      res.json({ posts: rows });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  app.get("/posts/:id", async (req, res, next) => {
-    try {
-      const id = req.params.id;
-      const [post] = await deps.db
-        .select()
-        .from(schema.posts)
-        .where(eq(schema.posts.id, id))
-        .limit(1);
-      if (!post) {
-        res.status(404).json({ error: "post_not_found" });
-        return;
-      }
-      const [postComments, postReactions] = await Promise.all([
-        deps.db.select().from(schema.comments).where(eq(schema.comments.postId, id)),
-        deps.db.select().from(schema.reactions).where(eq(schema.reactions.postId, id)),
-      ]);
-      res.json({ post, comments: postComments, reactions: postReactions });
-    } catch (err) {
-      next(err);
-    }
-  });
+  if (deps.perPubkeyBase58) {
+    app.use(
+      "/posts",
+      postsRouter({
+        db: deps.db,
+        perPubkeyBase58: deps.perPubkeyBase58,
+        ...(deps.perSecretKey ? { perSecretKey: deps.perSecretKey } : {}),
+      }),
+    );
+  }
 
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("[api]", err.stack ?? err);
