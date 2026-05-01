@@ -26,7 +26,7 @@ export const posts = pgTable(
     content: text("content").notNull(),
     contentHash: text("content_hash").notNull(), // SHA-256 of content, anchored on-chain
     perAttestation: text("per_attestation").notNull(), // TEE signature over (post_id, anon_id, content_hash)
-    stakeLamports: bigint("stake_lamports", { mode: "bigint" }).notNull().default(0n),
+    stakeLamports: bigint("stake_lamports", { mode: "bigint" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

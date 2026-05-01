@@ -1,6 +1,12 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { closeDb, getDb } from "./index.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+loadEnv({ path: path.resolve(__dirname, "../../../../.env") });
+
+const { closeDb, getDb } = await import("./index.js");
 
 async function main(): Promise<void> {
   const db = getDb();

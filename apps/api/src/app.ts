@@ -2,6 +2,13 @@ import express, { type Express } from "express";
 import { desc, eq } from "drizzle-orm";
 import { type DB, schema } from "./db/index.js";
 
+// Bigint columns (e.g. stake_lamports) come back from Postgres as JS bigints.
+// JSON.stringify refuses bigints by default; serialize them as strings so
+// large lamport values stay precise on the wire.
+(BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function () {
+  return this.toString();
+};
+
 export interface AppDeps {
   db: DB;
 }
@@ -20,13 +27,19 @@ export function createApp(deps: AppDeps): Express {
       const badge = typeof req.query.badge === "string" ? req.query.badge : undefined;
       const limit = Math.min(Number(req.query.limit ?? 50) || 50, 100);
 
-      const baseQuery = deps.db
-        .select()
-        .from(schema.posts)
-        .orderBy(desc(schema.posts.createdAt))
-        .limit(limit);
+      const rows = badge
+        ? await deps.db
+            .select()
+            .from(schema.posts)
+            .where(eq(schema.posts.badgeKind, badge))
+            .orderBy(desc(schema.posts.createdAt))
+            .limit(limit)
+        : await deps.db
+            .select()
+            .from(schema.posts)
+            .orderBy(desc(schema.posts.createdAt))
+            .limit(limit);
 
-      const rows = await (badge ? baseQuery.where(eq(schema.posts.badgeKind, badge)) : baseQuery);
       res.json({ posts: rows });
     } catch (err) {
       next(err);
@@ -36,7 +49,11 @@ export function createApp(deps: AppDeps): Express {
   app.get("/posts/:id", async (req, res, next) => {
     try {
       const id = req.params.id;
-      const post = await deps.db.query.posts.findFirst({ where: eq(schema.posts.id, id) });
+      const [post] = await deps.db
+        .select()
+        .from(schema.posts)
+        .where(eq(schema.posts.id, id))
+        .limit(1);
       if (!post) {
         res.status(404).json({ error: "post_not_found" });
         return;
@@ -52,7 +69,7 @@ export function createApp(deps: AppDeps): Express {
   });
 
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error("[api]", err);
+    console.error("[api]", err.stack ?? err);
     res.status(500).json({ error: "internal_error", message: err.message });
   });
 

@@ -48,6 +48,9 @@ importers:
       bs58:
         specifier: ^6.0.0
         version: 6.0.0
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
       drizzle-orm:
         specifier: ^0.36.4
         version: 0.36.4(@types/pg@8.20.0)(pg@8.20.0)
