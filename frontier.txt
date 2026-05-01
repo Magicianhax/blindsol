@@ -1,0 +1,246 @@
+MagicBlock
+🔐⚡ Privacy Track — Colosseum Hackathon (Powered by MagicBlock, ST MY & SNS)
+
+by MagicBlock
+
+|
+hackathon
+|
+Submissions Open
+
+|
+
+Global
+|
+3
+
+42
+
+Abhishek
+Pratik
+Yash
+
+Prizes
+Details
+token icon
+5,000
+USDC
+Total Prizes
+
+2,500
+
+USDC
+
+1st
+
+1,500
+
+USDC
+
+2nd
+
+1,000
+
+USDC
+
+3rd
+
+13
+
+SUBMISSIONS
+
+10d:19h:17m
+
+REMAINING
+
+Hackathon tracks do not require credits
+
+FRONTIER TRACK
+
+This is a special Frontier Hackathon track hosted exclusively on Superteam Earn.
+
+View All Tracks
+SKILLS NEEDED
+
+Blockchain
+CONTACT
+
+Reach outif you have any questions about this listing
+WINNER ANNOUNCEMENT BY
+
+May 27, 2026 - as scheduled by the sponsor.
+RELATED LIVE TRACKS
+
+Encrypt
+Encrypt & Ika - Bridgeless Capital Markets and Encrypted Capital Markets
+
+Encrypt
+
+USDC
+15k
+USDC
+
+|
+
+|
+
+Due in 10d
+
+SNS
+🪪 SNS Identity Track Colosseum Hackathon (Powered by SNS, STMY, MagicBlock))
+
+SNS
+
+USDC
+5,000
+USDC
+
+|
+
+|
+
+Due in 10d
+
+100xDevs
+100xDevs Frontier Hackathon Track
+
+100xDevs
+
+USDC
+10k
+USDC
+
+|
+
+|
+
+Due in 10d
+
+RPC Fast
+$10,000 in RPC Infrastructure Credits for Colosseum Frontier Hackathon
+
+RPC Fast
+
+USDC
+10k
+USDC
+
+|
+
+|
+
+Due in 10d
+
+Jupiter
+Not Your Regular Bounty
+
+Jupiter
+
+jupUSD
+3,000
+jupUSD
+
+|
+
+|
+
+Due in 10d
+
+Privacy is the primitive for the next generation of on-chain applications — especially in a world of autonomous agents.
+
+This track challenges you to build privacy-first systems on Solana, powered by MagicBlock's (Private) Ephemeral Rollups & Payment API:
+
+Ephemeral Rollup (ER)
+
+Private Ephemeral Rollup (PER)
+
+Private Payments API
+
+
+👉 Think beyond wallets and balances — build systems where data, intent, and interactions remain private by default, while still being composable and verifiable.
+
+⸻
+
+🧠 What we're looking for: Frontier Projects
+
+Private payments & shielded transactions
+
+Private DeFi (Auctions, Lending, Trading primitives)
+
+Agentic commerce, Agent-to-agent, x402 APIs, MPP etc
+
+and more ... find more ideas in our database for RFPs.
+
+
+⸻
+
+⚡ Why Solana and Magicblock
+
+Low latency, zero fees at scale
+
+Privacy, composability and security
+
+Regulatory compliance and control
+
+Built-in onchain automation and randomness
+
+Ready-to-Use Private Payment API
+
+
+⸻
+
+🏆 Prize Breakdown (Total: $5,000)
+
+🥇 1st Place — $2,500
+
+🥈 2nd Place — $1,500
+
+🥉 3rd Place — $1,000
+
+
+⸻
+
+🛠️ Judging Criteria
+
+Technology (40%)
+
+Effective use of ER, PER, or Private Payments API
+
+Working demo
+
+Quality of architecture and smart contract design
+
+Impact (30%)
+
+Solves a real-world problem
+
+Clear market need
+
+Potential for adoption and monetization
+
+Creativity & UX (30%)
+
+Novel primitives, mechanisms, or UX
+
+Smooth user experience
+
+Clarity of how the system works
+
+
+⸻
+
+
+✅ Submission Requirements
+
+Working demo: Live deployment with successful MagicBlock integration
+
+Code repository (GitHub): Publicly accessible
+
+Short demo video (3 min): Problem → Solution → Demo
+
+
+⸻
+
+
+👉 Bring privacy to Solana — with MagicBlock.
+

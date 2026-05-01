@@ -1,0 +1,11 @@
+{
+  "name": "@agentpay/web",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'web dashboard scaffolds in Phase 6 — fork private-payments-demo'",
+    "build": "echo 'web dashboard scaffolds in Phase 6'",
+    "test": "echo 'no tests yet'",
+    "typecheck": "echo 'no ts yet'"
+  }
+}
