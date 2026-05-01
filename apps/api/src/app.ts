@@ -1,6 +1,8 @@
 import express, { type Express } from "express";
 import { desc, eq } from "drizzle-orm";
 import { type DB, schema } from "./db/index.js";
+import type { BadgeIssuer } from "./per/issuer.js";
+import { badgesRouter } from "./routes/badges.js";
 
 // Bigint columns (e.g. stake_lamports) come back from Postgres as JS bigints.
 // JSON.stringify refuses bigints by default; serialize them as strings so
@@ -11,12 +13,17 @@ import { type DB, schema } from "./db/index.js";
 
 export interface AppDeps {
   db: DB;
+  badgeIssuer?: BadgeIssuer;
 }
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
   app.use(express.json({ limit: "32kb" }));
   app.disable("x-powered-by");
+
+  if (deps.badgeIssuer) {
+    app.use("/badges", badgesRouter({ issuer: deps.badgeIssuer, db: deps.db }));
+  }
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "blindsol-api" });

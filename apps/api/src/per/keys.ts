@@ -1,0 +1,56 @@
+import bs58 from "bs58";
+import nacl from "tweetnacl";
+
+/**
+ * The PER attestation keypair.
+ *
+ * In production, this lives only inside MagicBlock's TEE; the API only ever
+ * sees the public key (PER_ATTESTATION_PUBKEY) and verifies signatures.
+ *
+ * In dev / hackathon mode we run the "PER" inside this same process. We honor
+ * PER_DEV_SECRET if set, otherwise we autogenerate a fresh keypair on boot —
+ * fine for tests, but every restart invalidates outstanding tokens.
+ */
+export interface PerKeyMaterial {
+  publicKeyBase58: string;
+  /**
+   * Present only when this process IS the dev PER. In production verification
+   * mode this is undefined and the API can only verify, never sign.
+   */
+  secretKey?: Uint8Array;
+}
+
+let cached: PerKeyMaterial | undefined;
+
+export function getPerKeys(): PerKeyMaterial {
+  if (cached) return cached;
+
+  const explicitPubkey = process.env.PER_ATTESTATION_PUBKEY;
+  const devSecret = process.env.PER_DEV_SECRET;
+
+  if (devSecret) {
+    const secret = bs58.decode(devSecret);
+    if (secret.length !== 64) throw new Error("PER_DEV_SECRET must be a base58-encoded 64-byte ed25519 secret key");
+    const pub = nacl.sign.keyPair.fromSecretKey(secret).publicKey;
+    cached = { publicKeyBase58: bs58.encode(pub), secretKey: secret };
+    if (explicitPubkey && explicitPubkey !== cached.publicKeyBase58) {
+      throw new Error("PER_ATTESTATION_PUBKEY does not match the public key derived from PER_DEV_SECRET");
+    }
+    return cached;
+  }
+
+  if (explicitPubkey) {
+    cached = { publicKeyBase58: explicitPubkey };
+    return cached;
+  }
+
+  // Dev fallback: autogenerate a keypair so the app can still boot.
+  // This is fine for local testing; never use in prod.
+  const kp = nacl.sign.keyPair();
+  cached = { publicKeyBase58: bs58.encode(kp.publicKey), secretKey: kp.secretKey };
+  return cached;
+}
+
+export function resetPerKeysForTests(): void {
+  cached = undefined;
+}
