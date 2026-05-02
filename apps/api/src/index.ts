@@ -9,7 +9,7 @@ const fsMod = await import("node:fs");
 const { Connection, Keypair, PublicKey } = await import("@solana/web3.js");
 const bs58Mod = await import("bs58");
 const bs58 = bs58Mod.default;
-const { MagicBlockClient, KeypairSigner } = await import("@blindsol/magicblock-client");
+const { MagicBlockClient } = await import("@blindsol/magicblock-client");
 const { createApp } = await import("./app.js");
 const { getDb } = await import("./db/index.js");
 const { getPerKeys } = await import("./per/keys.js");
@@ -26,8 +26,16 @@ if (!perKeys.secretKey) {
   throw new Error("PER signing key not available — set PER_DEV_SECRET in dev or wire a real PER signer");
 }
 
-const connection = new Connection(process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com", "confirmed");
-const evidence = new SolanaEvidenceVerifier(connection);
+// Two networks in play:
+//   - mainnetConnection: JUP holdings check + MagicBlock stake-bond submission
+//   - badgeConnection:   network where the Anchor badge_registry is deployed
+//                        (devnet during the hackathon, mainnet for production)
+const mainnetRpc = process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com";
+const badgeRpc = process.env.BADGE_RPC_URL ?? mainnetRpc;
+const mainnetConnection = new Connection(mainnetRpc, "confirmed");
+const badgeConnection = new Connection(badgeRpc, "confirmed");
+
+const evidence = new SolanaEvidenceVerifier(mainnetConnection);
 
 // Optional on-chain badge minting via the deployed badge_registry program.
 const onChainRegistry = initOnChainRegistry();
@@ -65,7 +73,9 @@ const app = createApp({
 
 app.listen(port, () => {
   console.log(`[api] BlindSol API listening on :${port}`);
-  console.log(`[api] PER attestation pubkey: ${perKeys.publicKeyBase58}`);
+  console.log(`[api] mainnet RPC:             ${mainnetRpc}`);
+  console.log(`[api] badge program RPC:       ${badgeRpc}`);
+  console.log(`[api] PER attestation pubkey:  ${perKeys.publicKeyBase58}`);
   console.log(`[api] MagicBlock stake escrow: ${stakeService ? "ENABLED" : "stubbed"}`);
   console.log(`[api] On-chain badge minting:  ${onChainRegistry ? "ENABLED" : "stubbed"}`);
 });
@@ -84,7 +94,7 @@ function initOnChainRegistry() {
     const secret = JSON.parse(fsMod.readFileSync(keypairPath, "utf8")) as number[];
     const authority = Keypair.fromSecretKey(Uint8Array.from(secret));
     return new OnChainBadgeRegistry({
-      connection,
+      connection: badgeConnection,
       programId: new PublicKey(programId),
       authority,
     });
@@ -109,10 +119,10 @@ async function initStakeService() {
   }
 
   const houseKeypair = Keypair.fromSecretKey(bs58.decode(houseSecret));
-  const signer = KeypairSigner.fromSecretBase58(houseSecret);
+  const cluster = process.env.MAGICBLOCK_CLUSTER ?? "mainnet";
   const client = new MagicBlockClient({
     apiBase: process.env.MAGICBLOCK_API_BASE ?? "https://payments.magicblock.app",
-    signer,
+    cluster,
   });
 
   const usdcMint = new PublicKey(process.env.USDC_MINT ?? "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
@@ -120,11 +130,13 @@ async function initStakeService() {
 
   const service = new MagicBlockStakeService({
     client,
-    connection,
+    connection: mainnetConnection,
     houseKeypair,
     stakePoolPubkey: new PublicKey(stakePool),
     mint: usdcMint,
     perPostAmountRaw: perPostRaw,
+    cluster,
+    memo: "blindsol-stake-bond",
   });
 
   try {
