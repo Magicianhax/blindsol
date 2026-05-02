@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import { type DB } from "./db/index.js";
 import type { BadgeIssuer } from "./per/issuer.js";
-import type { MagicBlockStakeService } from "./magicblock/stake-service.js";
+import type { StakeBondPipeline } from "./posts/stake-bond.js";
 import { badgesRouter } from "./routes/badges.js";
 import { postsRouter } from "./routes/posts.js";
 
@@ -15,9 +15,10 @@ import { postsRouter } from "./routes/posts.js";
 export interface AppDeps {
   db: DB;
   badgeIssuer?: BadgeIssuer;
-  perPubkeyBase58?: string;
-  perSecretKey?: Uint8Array;
-  stakeService?: MagicBlockStakeService;
+  perPubkeyBase58: string;
+  perSecretKey: Uint8Array;
+  stakeBond?: StakeBondPipeline;
+  rpcUrls?: { mainnet: string; badge: string };
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -29,7 +30,8 @@ export function createApp(deps: AppDeps): Express {
     res.json({
       ok: true,
       service: "blindsol-api",
-      magicblock: deps.stakeService ? "enabled" : "stubbed",
+      stakeBond: deps.stakeBond ? "enabled" : "disabled",
+      rpc: deps.rpcUrls ?? null,
     });
   });
 
@@ -37,17 +39,15 @@ export function createApp(deps: AppDeps): Express {
     app.use("/badges", badgesRouter({ issuer: deps.badgeIssuer, db: deps.db }));
   }
 
-  if (deps.perPubkeyBase58) {
-    app.use(
-      "/posts",
-      postsRouter({
-        db: deps.db,
-        perPubkeyBase58: deps.perPubkeyBase58,
-        ...(deps.perSecretKey ? { perSecretKey: deps.perSecretKey } : {}),
-        ...(deps.stakeService ? { stakeService: deps.stakeService } : {}),
-      }),
-    );
-  }
+  app.use(
+    "/posts",
+    postsRouter({
+      db: deps.db,
+      perPubkeyBase58: deps.perPubkeyBase58,
+      perSecretKey: deps.perSecretKey,
+      ...(deps.stakeBond ? { stakeBond: deps.stakeBond } : {}),
+    }),
+  );
 
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("[api]", err.stack ?? err);

@@ -16,8 +16,11 @@ const describeIfDb = haveDb ? describe : describe.skip;
 // Single shared DB / app across all tests in this file. The pool is closed
 // once at the end via the file-level afterAll below.
 const db = haveDb ? getDb() : (null as never);
-// We don't exercise badge / post-write paths here; pubkey is unused for read tests.
-const app = haveDb ? createApp({ db, perPubkeyBase58: "1".repeat(32) }) : (null as never);
+// Dummy PER credentials — these tests only exercise read paths.
+const dummySecret = haveDb ? new Uint8Array(64) : (null as never);
+const app = haveDb
+  ? createApp({ db, perPubkeyBase58: "1".repeat(32), perSecretKey: dummySecret })
+  : (null as never);
 
 afterAll(async () => {
   if (haveDb) await closeDb();

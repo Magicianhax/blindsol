@@ -91,11 +91,36 @@ export const api = {
   getPost: (id: string) =>
     request<{ post: Post; comments: Comment[]; reactions: Reaction[] }>(`/posts/${id}`),
 
-  createPost: (token: string, content: string) =>
-    request<{ post: Post }>("/posts", {
+  preparePost: (token: string, args: { content: string; fromWallet: string }) =>
+    request<{
+      postId: string;
+      content: string;
+      contentHash: string;
+      stakeBond: {
+        postId: string;
+        contentHash: string;
+        memo: string;
+        expectedAmountRaw: string;
+        expectedRecipient: string;
+        unsignedTransactionBase64: string;
+        recentBlockhash: string;
+        lastValidBlockHeight: number;
+        requiredSigners: string[];
+        validator: string;
+        receipt: string;
+        expiresAt: number;
+      };
+    }>("/posts/prepare", {
       method: "POST",
       headers: authHeaders(token),
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(args),
+    }),
+
+  finalizePost: (token: string, args: { receipt: string; txSignature: string; content: string }) =>
+    request<{ post: Post; stakeTxSignature: string }>("/posts/finalize", {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify(args),
     }),
 
   createComment: (token: string, postId: string, content: string, parentId?: string) =>

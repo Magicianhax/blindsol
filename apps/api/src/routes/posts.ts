@@ -2,29 +2,32 @@ import { Router, type Request, type Response, type Router as ExpressRouter } fro
 import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { type DB, schema } from "../db/index.js";
-import { deriveAuthorAnonId, sha256Hex } from "../per/anon.js";
+import { deriveAuthorAnonId } from "../per/anon.js";
 import { signAttestationForDev } from "../attestation.js";
 import { authBearerBadge } from "../per/session.js";
 import { randomUUID } from "node:crypto";
-import type { MagicBlockStakeService } from "../magicblock/stake-service.js";
+import { sha256Hex, StakeBondError, type StakeBondPipeline } from "../posts/stake-bond.js";
 
 export interface PostsRouterDeps {
   db: DB;
   perPubkeyBase58: string;
+  perSecretKey: Uint8Array;
   /**
-   * Present in dev (we are also the PER signer). In prod the API is verify-only
-   * and the attestation is supplied by the client after a round-trip to the TEE.
+   * Required when the platform demands a stake bond (production). When
+   * absent, posts succeed without any payment — only useful for local
+   * smoke runs without funded wallets.
    */
-  perSecretKey?: Uint8Array;
-  /**
-   * Optional. When set, every successful POST /posts triggers a real private
-   * USDC transfer through MagicBlock's PER as the stake bond.
-   */
-  stakeService?: MagicBlockStakeService;
+  stakeBond?: StakeBondPipeline;
 }
 
-const createPostBody = z.object({
+const prepareBody = z.object({
   content: z.string().min(1).max(2000),
+  fromWallet: z.string().min(32).max(44),
+});
+
+const finalizeBody = z.object({
+  receipt: z.string().min(16),
+  txSignature: z.string().min(32).max(128),
 });
 
 const createCommentBody = z.object({
@@ -36,7 +39,7 @@ const createReactionBody = z.object({
   kind: z.enum(["up", "down", "spam"]),
 });
 
-const MIN_STAKE_LAMPORTS = 100_000n;
+const FALLBACK_STAKE_LAMPORTS = 0n;
 
 function authOrRespond(req: Request, res: Response, perPubkey: string) {
   const result = authBearerBadge(req, perPubkey);
@@ -51,13 +54,10 @@ function authOrRespond(req: Request, res: Response, perPubkey: string) {
   return result.session;
 }
 
-function requireSecret(secret: Uint8Array | undefined): Uint8Array {
-  if (!secret) throw new Error("dev PER secret unavailable; in prod the client supplies the attestation");
-  return secret;
-}
-
 export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
   const router = Router();
+
+  // ─── Reads ─────────────────────────────────────────────────────────
 
   router.get("/", async (req, res, next) => {
     try {
@@ -101,12 +101,14 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
     }
   });
 
-  router.post("/", async (req, res, next) => {
+  // ─── Two-step post commit (user-pays stake bond) ───────────────────
+
+  router.post("/prepare", async (req, res, next) => {
     try {
       const session = authOrRespond(req, res, deps.perPubkeyBase58);
       if (!session) return;
 
-      const parsed = createPostBody.safeParse(req.body);
+      const parsed = prepareBody.safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: "invalid_request", details: parsed.error.flatten() });
         return;
@@ -114,6 +116,88 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
 
       const postId = randomUUID();
       const contentHash = sha256Hex(parsed.data.content);
+
+      if (!deps.stakeBond) {
+        res.status(503).json({
+          error: "stake_unavailable",
+          reason: "platform stake bond pipeline is not configured",
+        });
+        return;
+      }
+
+      const prepared = await deps.stakeBond.prepare({
+        postId,
+        contentHash,
+        fromWallet: parsed.data.fromWallet,
+        perSecretKey: deps.perSecretKey,
+      });
+
+      res.status(200).json({
+        postId,
+        content: parsed.data.content,
+        contentHash,
+        stakeBond: prepared,
+      });
+    } catch (err) {
+      if (err instanceof StakeBondError) {
+        res.status(502).json({ error: "stake_bond_build_failed", reason: err.reason });
+        return;
+      }
+      next(err);
+    }
+  });
+
+  router.post("/finalize", async (req, res, next) => {
+    try {
+      const session = authOrRespond(req, res, deps.perPubkeyBase58);
+      if (!session) return;
+
+      if (!deps.stakeBond) {
+        res.status(503).json({ error: "stake_unavailable" });
+        return;
+      }
+
+      const parsed = finalizeBody.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "invalid_request", details: parsed.error.flatten() });
+        return;
+      }
+
+      // Need the original content too — we re-hash and verify it matches the
+      // receipt the server signed during /prepare.
+      const fullBody = z
+        .object({
+          receipt: z.string(),
+          txSignature: z.string(),
+          content: z.string().min(1).max(2000),
+        })
+        .safeParse(req.body);
+      if (!fullBody.success) {
+        res.status(400).json({ error: "invalid_request", details: fullBody.error.flatten() });
+        return;
+      }
+
+      let receiptPayload;
+      try {
+        receiptPayload = await deps.stakeBond.verifyOnChain({
+          receipt: fullBody.data.receipt,
+          perPubkeyBase58: deps.perPubkeyBase58,
+          txSignature: fullBody.data.txSignature,
+        });
+      } catch (err) {
+        if (err instanceof StakeBondError) {
+          res.status(400).json({ error: "stake_bond_invalid", reason: err.reason });
+          return;
+        }
+        throw err;
+      }
+
+      const recomputedHash = sha256Hex(fullBody.data.content);
+      if (recomputedHash !== receiptPayload.contentHash) {
+        res.status(400).json({ error: "content_changed_since_prepare" });
+        return;
+      }
+
       const authorAnonId = deriveAuthorAnonId(session.token.anonSeed, session.token.kind);
       const issuedAt = Math.floor(Date.now() / 1000);
 
@@ -122,50 +206,34 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
           action: "post",
           anonId: authorAnonId,
           badgeKind: session.token.kind,
-          resourceId: postId,
-          contentHash,
+          resourceId: receiptPayload.postId,
+          contentHash: receiptPayload.contentHash,
           issuedAt,
         },
-        requireSecret(deps.perSecretKey),
+        deps.perSecretKey,
       );
-
-      // Lock a stake bond via MagicBlock private transfer if configured.
-      // This is real USDC moving on Solana mainnet beta + private settlement
-      // through the PER. We surface failures as 502 so the client knows the
-      // post wasn't recorded.
-      let stakeReceipt: { signature: string; amountRaw: string } | undefined;
-      if (deps.stakeService) {
-        try {
-          const r = await deps.stakeService.lockStake();
-          stakeReceipt = { signature: r.signature, amountRaw: r.amountRaw };
-        } catch (err) {
-          res.status(502).json({
-            error: "stake_failed",
-            reason: (err as Error).message,
-          });
-          return;
-        }
-      }
 
       const [inserted] = await deps.db
         .insert(schema.posts)
         .values({
-          id: postId,
+          id: receiptPayload.postId,
           authorAnonId,
           badgeKind: session.token.kind,
-          content: parsed.data.content,
-          contentHash,
+          content: fullBody.data.content,
+          contentHash: receiptPayload.contentHash,
           perAttestation: attestation.signature,
-          stakeLamports: stakeReceipt ? BigInt(stakeReceipt.amountRaw) : MIN_STAKE_LAMPORTS,
+          stakeLamports: BigInt(receiptPayload.expectedAmountRaw),
         })
         .returning();
       if (!inserted) throw new Error("failed to insert post");
 
-      res.status(201).json({ post: inserted, stake: stakeReceipt });
+      res.status(201).json({ post: inserted, stakeTxSignature: fullBody.data.txSignature });
     } catch (err) {
       next(err);
     }
   });
+
+  // ─── Comments + reactions (no stake required) ──────────────────────
 
   router.post("/:id/comments", async (req, res, next) => {
     try {
@@ -178,8 +246,6 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
         return;
       }
 
-      // Confirm the parent post exists, and (if threading) that the parent
-      // comment belongs to it.
       const postId = req.params.id;
       const [post] = await deps.db.select().from(schema.posts).where(eq(schema.posts.id, postId)).limit(1);
       if (!post) {
@@ -212,7 +278,7 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
           contentHash,
           issuedAt,
         },
-        requireSecret(deps.perSecretKey),
+        deps.perSecretKey,
       );
 
       const [inserted] = await deps.db
@@ -256,7 +322,6 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
       const reactorAnonId = deriveAuthorAnonId(session.token.anonSeed, session.token.kind);
       const kind = parsed.data.kind;
 
-      // Idempotent insert: same (post, anon, kind) returns existing row.
       const existingRows = await deps.db
         .select()
         .from(schema.reactions)
@@ -284,7 +349,7 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
           contentHash: "",
           issuedAt,
         },
-        requireSecret(deps.perSecretKey),
+        deps.perSecretKey,
       );
 
       const [inserted] = await deps.db
@@ -307,3 +372,6 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
 
   return router;
 }
+
+// Reserved for future fallback flows (e.g. comment stakes).
+void FALLBACK_STAKE_LAMPORTS;

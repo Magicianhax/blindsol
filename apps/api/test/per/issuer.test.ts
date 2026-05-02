@@ -29,7 +29,12 @@ function makeIssuerEnv() {
     perSecretKey: perKp.secretKey,
     perPubkeyBase58: perPubB58,
   });
-  const app = createApp({ db, badgeIssuer: issuer });
+  const app = createApp({
+    db,
+    badgeIssuer: issuer,
+    perPubkeyBase58: perPubB58,
+    perSecretKey: perKp.secretKey,
+  });
   return { db, perKp, perPubB58, app };
 }
 
@@ -99,7 +104,12 @@ describeIfDb("POST /badges/claim", () => {
       perSecretKey: env.perKp.secretKey,
       perPubkeyBase58: env.perPubB58,
     });
-    const failingApp = createApp({ db: env.db, badgeIssuer: failingIssuer });
+    const failingApp = createApp({
+      db: env.db,
+      badgeIssuer: failingIssuer,
+      perPubkeyBase58: env.perPubB58,
+      perSecretKey: env.perKp.secretKey,
+    });
 
     const claim = signedClaim("test challenge");
     const res = await request(failingApp)

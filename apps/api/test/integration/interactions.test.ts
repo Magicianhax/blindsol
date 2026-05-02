@@ -34,7 +34,7 @@ function makeEnv() {
     perPubkeyBase58: perPubB58,
     perSecretKey: perKp.secretKey,
   });
-  return { db, app };
+  return { db, app, perPubB58 };
 }
 
 async function claim(app: any, kind: "jup_holder" | "anthropic_eng" = "jup_holder"): Promise<string> {
@@ -48,10 +48,38 @@ async function claim(app: any, kind: "jup_holder" | "anthropic_eng" = "jup_holde
   return r.body.badgeToken as string;
 }
 
-async function makePost(app: any, token: string, content = "parent post"): Promise<string> {
-  const r = await request(app).post("/posts").set("Authorization", `Bearer ${token}`).send({ content });
-  if (r.status !== 201) throw new Error(`post failed: ${r.status}`);
-  return r.body.post.id as string;
+// Inserts a post directly into the DB so comment/reaction tests don't depend
+// on the (stake-gated) two-step post commit flow.
+async function makePost(env: { db: any }, token: string, content = "parent post"): Promise<string> {
+  const { schema } = await import("../../src/db/index.js");
+  const { verifyBadgeToken } = await import("../../src/per/token.js");
+  const { deriveAuthorAnonId, sha256Hex } = await import("../../src/per/anon.js");
+  // Decode the badge token to derive the same anon_id the API would use, so
+  // comment + post are linked under the same anonymous identity in tests
+  // that assert on threading.
+  const perPubkey = (env as any).perPubB58 ?? "1".repeat(32);
+  let badgeKind = "jup_holder";
+  let anonSeed = "0".repeat(64);
+  try {
+    const payload = verifyBadgeToken(token, perPubkey);
+    badgeKind = payload.kind;
+    anonSeed = payload.anonSeed;
+  } catch {
+    // fall back to defaults — caller must not assert on anon stability
+  }
+  const authorAnonId = deriveAuthorAnonId(anonSeed, badgeKind);
+  const { randomUUID } = await import("node:crypto");
+  const id = randomUUID();
+  await env.db.insert(schema.posts).values({
+    id,
+    authorAnonId,
+    badgeKind,
+    content,
+    contentHash: sha256Hex(content),
+    perAttestation: "test-attestation",
+    stakeLamports: 100_000n,
+  });
+  return id;
 }
 
 describeIfDb("POST /posts/:id/comments", () => {
@@ -74,14 +102,14 @@ describeIfDb("POST /posts/:id/comments", () => {
 
   it("rejects unauthenticated comments", async () => {
     const token = await claim(env.app);
-    const postId = await makePost(env.app, token);
+    const postId = await makePost(env, token);
     const r = await request(env.app).post(`/posts/${postId}/comments`).send({ content: "hi" });
     expect(r.status).toBe(401);
   });
 
   it("creates a top-level comment", async () => {
     const token = await claim(env.app);
-    const postId = await makePost(env.app, token);
+    const postId = await makePost(env, token);
     const r = await request(env.app)
       .post(`/posts/${postId}/comments`)
       .set("Authorization", `Bearer ${token}`)
@@ -95,7 +123,7 @@ describeIfDb("POST /posts/:id/comments", () => {
   it("creates a threaded reply when parentId is provided", async () => {
     const tokenA = await claim(env.app);
     const tokenB = await claim(env.app, "anthropic_eng");
-    const postId = await makePost(env.app, tokenA);
+    const postId = await makePost(env, tokenA);
     const top = await request(env.app)
       .post(`/posts/${postId}/comments`)
       .set("Authorization", `Bearer ${tokenA}`)
@@ -110,8 +138,8 @@ describeIfDb("POST /posts/:id/comments", () => {
 
   it("rejects parentId from a different post", async () => {
     const token = await claim(env.app);
-    const postA = await makePost(env.app, token, "post A");
-    const postB = await makePost(env.app, token, "post B");
+    const postA = await makePost(env, token, "post A");
+    const postB = await makePost(env, token, "post B");
     const onA = await request(env.app)
       .post(`/posts/${postA}/comments`)
       .set("Authorization", `Bearer ${token}`)
@@ -135,7 +163,7 @@ describeIfDb("POST /posts/:id/comments", () => {
 
   it("comment + post by same badge token share the same anon_id", async () => {
     const token = await claim(env.app);
-    const postId = await makePost(env.app, token);
+    const postId = await makePost(env, token);
     const c = await request(env.app)
       .post(`/posts/${postId}/comments`)
       .set("Authorization", `Bearer ${token}`)
@@ -166,7 +194,7 @@ describeIfDb("POST /posts/:id/reactions", () => {
 
   it("creates a reaction with a valid kind", async () => {
     const token = await claim(env.app);
-    const postId = await makePost(env.app, token);
+    const postId = await makePost(env, token);
     const r = await request(env.app)
       .post(`/posts/${postId}/reactions`)
       .set("Authorization", `Bearer ${token}`)
@@ -178,7 +206,7 @@ describeIfDb("POST /posts/:id/reactions", () => {
 
   it("is idempotent: second up-vote returns the existing reaction", async () => {
     const token = await claim(env.app);
-    const postId = await makePost(env.app, token);
+    const postId = await makePost(env, token);
     const first = await request(env.app)
       .post(`/posts/${postId}/reactions`)
       .set("Authorization", `Bearer ${token}`)
@@ -195,7 +223,7 @@ describeIfDb("POST /posts/:id/reactions", () => {
 
   it("rejects invalid reaction kinds", async () => {
     const token = await claim(env.app);
-    const postId = await makePost(env.app, token);
+    const postId = await makePost(env, token);
     const r = await request(env.app)
       .post(`/posts/${postId}/reactions`)
       .set("Authorization", `Bearer ${token}`)
@@ -215,7 +243,7 @@ describeIfDb("POST /posts/:id/reactions", () => {
 
   it("allows same reactor to up AND down with different rows", async () => {
     const token = await claim(env.app);
-    const postId = await makePost(env.app, token);
+    const postId = await makePost(env, token);
     const up = await request(env.app)
       .post(`/posts/${postId}/reactions`)
       .set("Authorization", `Bearer ${token}`)
