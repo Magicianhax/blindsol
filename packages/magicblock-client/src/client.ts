@@ -9,37 +9,98 @@ import {
 
 export interface MagicBlockClientConfig {
   apiBase: string;
-  signer: WalletSigner;
+  /** Optional — only required for the auth flow used by private-balance reads. */
+  signer?: WalletSigner;
   fetchImpl?: typeof fetch;
+  /** Default cluster passed to all endpoints (`mainnet`, `devnet`, or a custom RPC URL). */
+  cluster?: string;
+}
+
+/**
+ * Source / destination location for an SPL transfer.
+ *   - `base`      → the SPL token account on Solana mainnet/devnet
+ *   - `ephemeral` → the SPL token account inside the Ephemeral Rollup
+ */
+export type Balance = "base" | "ephemeral";
+
+export type TransferVisibility = "public" | "private";
+
+export interface BuildTransferRequest {
+  from: string;
+  to: string;
+  mint: string;
+  /** Base-unit integer (USDC has 6 decimals → 1 USDC = 1_000_000). */
+  amount: number;
+  visibility: TransferVisibility;
+  fromBalance: Balance;
+  toBalance: Balance;
+  cluster?: string;
+  validator?: string;
+  initIfMissing?: boolean;
+  initAtasIfMissing?: boolean;
+  initVaultIfMissing?: boolean;
+  memo?: string;
+  /** Private only. Min delay before settlement (ms, numeric string). */
+  minDelayMs?: string;
+  /** Private only. Max delay before settlement (ms, numeric string). */
+  maxDelayMs?: string;
+  /** Private only. Encrypted client-side reference id (numeric string). */
+  clientRefId?: string;
+  /** Private only. Split into N sub-transfers for timing obfuscation (1-15). */
+  split?: number;
+  /** When true, the API uses a sponsor as fee payer. */
+  gasless?: boolean;
+  /** Force a legacy transaction (skip lookup-table compilation). */
+  legacy?: boolean;
+}
+
+export interface BuildDepositRequest {
+  owner: string;
+  amount: number;
+  mint?: string;
+  cluster?: string;
+  validator?: string;
+  initIfMissing?: boolean;
+  initVaultIfMissing?: boolean;
+  initAtasIfMissing?: boolean;
+  idempotent?: boolean;
+}
+
+export interface BuildWithdrawRequest {
+  owner: string;
+  mint: string;
+  amount: number;
+  cluster?: string;
+  validator?: string;
+  initIfMissing?: boolean;
+  initAtasIfMissing?: boolean;
+  escrowIndex?: number;
+  idempotent?: boolean;
 }
 
 export interface UnsignedTransactionResponse {
+  kind: "transfer" | "deposit" | "withdraw" | "initializeMint";
+  version: "legacy" | "v0";
   /** Base64-encoded serialized unsigned Solana transaction. */
-  transaction: string;
-  /** Optional metadata returned by the API. */
-  meta?: Record<string, unknown>;
-}
-
-export interface TransferRequest {
-  mint: string;
-  /** Base58 recipient pubkey. */
-  recipient: string;
-  /** Amount in raw token units (e.g. for 6-decimal USDC, 1.0 USDC = "1000000"). */
-  amount: string;
-  /** When true, the transfer settles inside the PER and leaves no on-chain link. */
-  private?: boolean;
-  /** Optional client-side memo. */
-  memo?: string;
-}
-
-export interface DepositRequest {
-  mint: string;
-  /** Amount in raw token units to move from base chain into PER. */
-  amount: string;
+  transactionBase64: string;
+  sendTo: Balance;
+  recentBlockhash: string;
+  lastValidBlockHeight: number;
+  instructionCount: number;
+  requiredSigners: string[];
+  validator: string;
 }
 
 const DEFAULT_API_BASE = "https://payments.magicblock.app";
 
+/**
+ * Thin wrapper around the MagicBlock Private Payments REST API.
+ *
+ * The API is stateless — it builds unsigned transactions; the caller signs
+ * and submits. Authentication is only required for endpoints that read
+ * private data (e.g. `/v1/spl/private-balance`); standard transfer/deposit/
+ * withdraw flows do not need a bearer token.
+ */
 export class MagicBlockClient {
   private readonly fetchImpl: typeof fetch;
   private session: AuthSession | undefined;
@@ -48,23 +109,29 @@ export class MagicBlockClient {
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
 
-  static withDefaults(signer: WalletSigner): MagicBlockClient {
-    return new MagicBlockClient({ apiBase: DEFAULT_API_BASE, signer });
+  static withDefaults(): MagicBlockClient {
+    return new MagicBlockClient({ apiBase: DEFAULT_API_BASE });
   }
+
+  // ─── Auth (optional) ───────────────────────────────────────────────
 
   /**
    * Run the full challenge → sign → login flow and cache the bearer token.
-   * Idempotent — subsequent calls return the cached session.
+   * Only needed for `/v1/spl/private-balance` (and `/v1/spl/transfer` when
+   * routing through the Private ER).
    */
   async login(): Promise<AuthSession> {
     if (this.session) return this.session;
+    if (!this.config.signer) {
+      throw new Error("MagicBlockClient.login(): no signer configured");
+    }
 
     const pubkey = await this.config.signer.publicKey();
     const { challenge } = await this.getJson<ChallengeResponse>(
-      `/v1/spl/challenge?pubkey=${encodeURIComponent(pubkey)}`,
+      this.withCommonQuery(`/v1/spl/challenge?pubkey=${encodeURIComponent(pubkey)}`),
     );
     const signature = await this.config.signer.signMessage(challenge);
-    const { token } = await this.postJson<LoginResponse>("/v1/spl/login", {
+    const { token } = await this.postJson<LoginResponse>(this.withCommonQuery("/v1/spl/login"), {
       pubkey,
       challenge,
       signature,
@@ -74,58 +141,73 @@ export class MagicBlockClient {
     return this.session;
   }
 
-  async balance(mint: string): Promise<BalanceResult> {
-    const session = await this.login();
-    return this.getJson<BalanceResult>(
-      `/v1/spl/balance?mint=${encodeURIComponent(mint)}&address=${encodeURIComponent(session.pubkey)}`,
-    );
-  }
-
-  async privateBalance(mint: string): Promise<BalanceResult> {
-    const session = await this.login();
-    return this.getJson<BalanceResult>(
-      `/v1/spl/private-balance?mint=${encodeURIComponent(mint)}&address=${encodeURIComponent(session.pubkey)}`,
-      { Authorization: `Bearer ${session.bearerToken}` },
-    );
-  }
-
-  /**
-   * Build an unsigned deposit transaction (base chain → PER).
-   * The caller must sign and submit it on Solana.
-   */
-  async buildDeposit(req: DepositRequest): Promise<UnsignedTransactionResponse> {
-    const session = await this.login();
-    return this.postJson<UnsignedTransactionResponse>(
-      "/v1/spl/deposit",
-      { mint: req.mint, amount: req.amount, sender: session.pubkey },
-      { Authorization: `Bearer ${session.bearerToken}` },
-    );
-  }
-
-  /**
-   * Build an unsigned transfer transaction. With `private: true` the transfer
-   * is settled inside the PER (no traceable on-chain link).
-   */
-  async buildTransfer(req: TransferRequest): Promise<UnsignedTransactionResponse> {
-    const session = await this.login();
-    return this.postJson<UnsignedTransactionResponse>(
-      "/v1/spl/transfer",
-      {
-        mint: req.mint,
-        sender: session.pubkey,
-        recipient: req.recipient,
-        amount: req.amount,
-        private: req.private ?? true,
-        ...(req.memo ? { memo: req.memo } : {}),
-      },
-      { Authorization: `Bearer ${session.bearerToken}` },
-    );
-  }
-
-  /** Force re-auth, e.g. after a 401. */
   resetSession(): void {
     this.session = undefined;
   }
+
+  // ─── Reads ─────────────────────────────────────────────────────────
+
+  async balance(args: { address: string; mint: string; cluster?: string }): Promise<BalanceResult> {
+    const params = new URLSearchParams({
+      address: args.address,
+      mint: args.mint,
+    });
+    if (args.cluster ?? this.config.cluster) {
+      params.set("cluster", args.cluster ?? this.config.cluster!);
+    }
+    return this.getJson<BalanceResult>(`/v1/spl/balance?${params.toString()}`);
+  }
+
+  async privateBalance(args: { address: string; mint: string; cluster?: string }): Promise<BalanceResult> {
+    const session = await this.login();
+    const params = new URLSearchParams({
+      address: args.address,
+      mint: args.mint,
+    });
+    if (args.cluster ?? this.config.cluster) {
+      params.set("cluster", args.cluster ?? this.config.cluster!);
+    }
+    return this.getJson<BalanceResult>(`/v1/spl/private-balance?${params.toString()}`, {
+      Authorization: `Bearer ${session.bearerToken}`,
+    });
+  }
+
+  // ─── Builders ──────────────────────────────────────────────────────
+
+  /**
+   * Build an unsigned transfer transaction. Public transfers are pure
+   * SPL token transfers; private transfers route through the PER and may
+   * include `split` and delay obfuscation.
+   *
+   * Auth is only required when the request needs to connect to the Private
+   * ER (e.g. when reading private state). Pure base→base private transfers
+   * usually do not need auth.
+   */
+  async buildTransfer(req: BuildTransferRequest, opts?: { bearerToken?: string }): Promise<UnsignedTransactionResponse> {
+    const headers: Record<string, string> = {};
+    if (opts?.bearerToken) headers.Authorization = `Bearer ${opts.bearerToken}`;
+    return this.postJson<UnsignedTransactionResponse>(
+      this.withCommonQuery("/v1/spl/transfer"),
+      this.attachClusterDefault(req),
+      headers,
+    );
+  }
+
+  async buildDeposit(req: BuildDepositRequest): Promise<UnsignedTransactionResponse> {
+    return this.postJson<UnsignedTransactionResponse>(
+      this.withCommonQuery("/v1/spl/deposit"),
+      this.attachClusterDefault(req),
+    );
+  }
+
+  async buildWithdraw(req: BuildWithdrawRequest): Promise<UnsignedTransactionResponse> {
+    return this.postJson<UnsignedTransactionResponse>(
+      this.withCommonQuery("/v1/spl/withdraw"),
+      this.attachClusterDefault(req),
+    );
+  }
+
+  // ─── Internals ─────────────────────────────────────────────────────
 
   private async getJson<T>(path: string, headers: Record<string, string> = {}): Promise<T> {
     const res = await this.fetchImpl(this.url(path), {
@@ -150,6 +232,17 @@ export class MagicBlockClient {
 
   private url(path: string): string {
     return `${this.config.apiBase.replace(/\/$/, "")}${path}`;
+  }
+
+  private withCommonQuery(path: string): string {
+    if (!this.config.cluster) return path;
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}cluster=${encodeURIComponent(this.config.cluster)}`;
+  }
+
+  private attachClusterDefault<T extends { cluster?: string }>(req: T): T {
+    if (req.cluster || !this.config.cluster) return req;
+    return { ...req, cluster: this.config.cluster };
   }
 
   private async parse<T>(res: Response, endpoint: string): Promise<T> {

@@ -4,9 +4,12 @@ export interface AuthSession {
 }
 
 export interface BalanceResult {
+  address: string;
   mint: string;
-  amount: string;
-  decimals: number;
+  ata: string;
+  location: "base" | "ephemeral";
+  /** Base-unit string (e.g. "1000000" = 1 USDC). */
+  balance: string;
 }
 
 export interface ChallengeResponse {

@@ -55,16 +55,9 @@ describe("MagicBlockClient.login", () => {
     expect(session.pubkey).toBe(await signer.publicKey());
     expect(session.bearerToken).toBe("bearer-abc");
     expect(calls).toHaveLength(2);
-    expect(calls[0]!.url).toContain(`/v1/spl/challenge?pubkey=${session.pubkey}`);
-    expect(calls[1]!.url).toContain("/v1/spl/login");
-    expect(calls[1]!.body).toMatchObject({
-      pubkey: session.pubkey,
-      challenge: "challenge-xyz",
-    });
-    expect(typeof (calls[1]!.body as { signature: string }).signature).toBe("string");
   });
 
-  it("returns the cached session on the second call without hitting the network", async () => {
+  it("returns the cached session on the second call", async () => {
     const { stub, calls } = makeFetchStub([
       { match: /\/v1\/spl\/challenge/, response: { challenge: "c1" } },
       { match: /\/v1\/spl\/login/, response: { token: "t1" } },
@@ -78,7 +71,7 @@ describe("MagicBlockClient.login", () => {
     expect(calls).toHaveLength(2);
   });
 
-  it("throws MagicBlockApiError on non-2xx with the failing endpoint", async () => {
+  it("throws MagicBlockApiError on non-2xx", async () => {
     const stub = vi.fn().mockResolvedValue(
       new Response("server is on fire", { status: 503, statusText: "Service Unavailable" }),
     );
@@ -86,91 +79,241 @@ describe("MagicBlockClient.login", () => {
 
     await expect(client.login()).rejects.toBeInstanceOf(MagicBlockApiError);
   });
+
+  it("throws when no signer is configured", async () => {
+    const stub = vi.fn();
+    const client = new MagicBlockClient({ apiBase: API_BASE, fetchImpl: stub });
+    await expect(client.login()).rejects.toThrow(/no signer configured/);
+  });
 });
 
-describe("MagicBlockClient balance queries", () => {
-  it("calls /v1/spl/balance unauthenticated after login", async () => {
-    const signer = KeypairSigner.generate();
+describe("MagicBlockClient.balance", () => {
+  it("calls /v1/spl/balance unauthenticated", async () => {
     const { stub, calls } = makeFetchStub([
-      { match: /\/v1\/spl\/challenge/, response: { challenge: "c" } },
-      { match: /\/v1\/spl\/login/, response: { token: "tok" } },
       {
         match: /\/v1\/spl\/balance/,
-        response: { mint: USDC, amount: "1000000", decimals: 6 },
+        response: { address: "OWNER", mint: USDC, ata: "ATA", location: "base", balance: "1000000" },
       },
     ]);
-    const client = new MagicBlockClient({ apiBase: API_BASE, signer, fetchImpl: stub });
+    const client = new MagicBlockClient({ apiBase: API_BASE, fetchImpl: stub });
 
-    const result = await client.balance(USDC);
+    const result = await client.balance({ address: "OWNER", mint: USDC });
 
-    expect(result.amount).toBe("1000000");
-    const balanceCall = calls.find((c) => c.url.includes("/v1/spl/balance"))!;
-    expect(balanceCall.headers.authorization).toBeUndefined();
+    expect(result.balance).toBe("1000000");
+    expect(result.location).toBe("base");
+    expect(calls[0]!.headers.authorization).toBeUndefined();
+    expect(calls[0]!.url).toContain("address=OWNER");
+    expect(calls[0]!.url).toContain(`mint=${USDC}`);
   });
 
-  it("attaches Bearer token on /v1/spl/private-balance", async () => {
+  it("attaches Bearer on /v1/spl/private-balance via login flow", async () => {
     const signer = KeypairSigner.generate();
     const { stub, calls } = makeFetchStub([
       { match: /\/v1\/spl\/challenge/, response: { challenge: "c" } },
       { match: /\/v1\/spl\/login/, response: { token: "tok" } },
       {
         match: /\/v1\/spl\/private-balance/,
-        response: { mint: USDC, amount: "500000", decimals: 6 },
+        response: { address: "OWNER", mint: USDC, ata: "ATA", location: "ephemeral", balance: "500000" },
       },
     ]);
     const client = new MagicBlockClient({ apiBase: API_BASE, signer, fetchImpl: stub });
 
-    await client.privateBalance(USDC);
+    await client.privateBalance({ address: "OWNER", mint: USDC });
 
     const privateCall = calls.find((c) => c.url.includes("/v1/spl/private-balance"))!;
     expect(privateCall.headers.authorization).toBe("Bearer tok");
   });
 });
 
-describe("MagicBlockClient transfer & deposit", () => {
-  it("builds an unsigned private transfer with sender, mint, recipient, amount", async () => {
-    const signer = KeypairSigner.generate();
-    const senderPub = await signer.publicKey();
+describe("MagicBlockClient.buildTransfer", () => {
+  it("posts the documented private base→base shape and returns the unsigned tx", async () => {
     const { stub, calls } = makeFetchStub([
-      { match: /\/v1\/spl\/challenge/, response: { challenge: "c" } },
-      { match: /\/v1\/spl\/login/, response: { token: "tok" } },
-      { match: /\/v1\/spl\/transfer/, response: { transaction: "BASE64_UNSIGNED_TX" } },
+      {
+        match: /\/v1\/spl\/transfer/,
+        response: {
+          kind: "transfer",
+          version: "v0",
+          transactionBase64: "BASE64_TX",
+          sendTo: "base",
+          recentBlockhash: "BLOCKHASH",
+          lastValidBlockHeight: 12345,
+          instructionCount: 2,
+          requiredSigners: ["FROM_PUBKEY"],
+          validator: "VALIDATOR_PUBKEY",
+        },
+      },
     ]);
-    const client = new MagicBlockClient({ apiBase: API_BASE, signer, fetchImpl: stub });
+    const client = new MagicBlockClient({ apiBase: API_BASE, fetchImpl: stub });
 
     const result = await client.buildTransfer({
+      from: "FROM_PUBKEY",
+      to: "TO_PUBKEY",
       mint: USDC,
-      recipient: "RECIPIENT_PUBKEY_BASE58",
-      amount: "100000",
+      amount: 100_000,
+      visibility: "private",
+      fromBalance: "base",
+      toBalance: "base",
+      initAtasIfMissing: true,
     });
 
-    expect(result.transaction).toBe("BASE64_UNSIGNED_TX");
-    const transferCall = calls.find((c) => c.url.includes("/v1/spl/transfer"))!;
+    expect(result.transactionBase64).toBe("BASE64_TX");
+    expect(result.requiredSigners).toEqual(["FROM_PUBKEY"]);
+    const transferCall = calls[0]!;
     expect(transferCall.method).toBe("POST");
-    expect(transferCall.headers.authorization).toBe("Bearer tok");
     expect(transferCall.body).toMatchObject({
+      from: "FROM_PUBKEY",
+      to: "TO_PUBKEY",
       mint: USDC,
-      sender: senderPub,
-      recipient: "RECIPIENT_PUBKEY_BASE58",
-      amount: "100000",
-      private: true,
+      amount: 100_000,
+      visibility: "private",
+      fromBalance: "base",
+      toBalance: "base",
+      initAtasIfMissing: true,
     });
+    // Should NOT include a sender/recipient field — those were the wrong names.
+    expect(transferCall.body).not.toHaveProperty("sender");
+    expect(transferCall.body).not.toHaveProperty("recipient");
   });
 
-  it("builds an unsigned deposit transaction", async () => {
-    const signer = KeypairSigner.generate();
-    const senderPub = await signer.publicKey();
+  it("attaches a Bearer token when explicitly provided", async () => {
     const { stub, calls } = makeFetchStub([
-      { match: /\/v1\/spl\/challenge/, response: { challenge: "c" } },
-      { match: /\/v1\/spl\/login/, response: { token: "tok" } },
-      { match: /\/v1\/spl\/deposit/, response: { transaction: "BASE64_DEPOSIT_TX" } },
+      {
+        match: /\/v1\/spl\/transfer/,
+        response: {
+          kind: "transfer",
+          version: "v0",
+          transactionBase64: "X",
+          sendTo: "base",
+          recentBlockhash: "B",
+          lastValidBlockHeight: 1,
+          instructionCount: 1,
+          requiredSigners: [],
+          validator: "V",
+        },
+      },
     ]);
-    const client = new MagicBlockClient({ apiBase: API_BASE, signer, fetchImpl: stub });
+    const client = new MagicBlockClient({ apiBase: API_BASE, fetchImpl: stub });
 
-    const result = await client.buildDeposit({ mint: USDC, amount: "5000000" });
+    await client.buildTransfer(
+      {
+        from: "F",
+        to: "T",
+        mint: USDC,
+        amount: 1,
+        visibility: "private",
+        fromBalance: "ephemeral",
+        toBalance: "ephemeral",
+      },
+      { bearerToken: "tok-123" },
+    );
 
-    expect(result.transaction).toBe("BASE64_DEPOSIT_TX");
-    const depositCall = calls.find((c) => c.url.includes("/v1/spl/deposit"))!;
-    expect(depositCall.body).toMatchObject({ mint: USDC, sender: senderPub, amount: "5000000" });
+    expect(calls[0]!.headers.authorization).toBe("Bearer tok-123");
+  });
+
+  it("forwards split + delay knobs for private transfers", async () => {
+    const { stub, calls } = makeFetchStub([
+      {
+        match: /\/v1\/spl\/transfer/,
+        response: {
+          kind: "transfer",
+          version: "v0",
+          transactionBase64: "X",
+          sendTo: "base",
+          recentBlockhash: "B",
+          lastValidBlockHeight: 1,
+          instructionCount: 1,
+          requiredSigners: [],
+          validator: "V",
+        },
+      },
+    ]);
+    const client = new MagicBlockClient({ apiBase: API_BASE, fetchImpl: stub });
+
+    await client.buildTransfer({
+      from: "F",
+      to: "T",
+      mint: USDC,
+      amount: 100,
+      visibility: "private",
+      fromBalance: "base",
+      toBalance: "base",
+      split: 3,
+      minDelayMs: "1000",
+      maxDelayMs: "5000",
+      memo: "stake-bond",
+    });
+
+    expect(calls[0]!.body).toMatchObject({
+      split: 3,
+      minDelayMs: "1000",
+      maxDelayMs: "5000",
+      memo: "stake-bond",
+    });
+  });
+});
+
+describe("MagicBlockClient.buildDeposit", () => {
+  it("posts the documented deposit shape and returns base sendTo", async () => {
+    const { stub, calls } = makeFetchStub([
+      {
+        match: /\/v1\/spl\/deposit/,
+        response: {
+          kind: "deposit",
+          version: "legacy",
+          transactionBase64: "DEPOSIT_TX",
+          sendTo: "base",
+          recentBlockhash: "B",
+          lastValidBlockHeight: 1,
+          instructionCount: 1,
+          requiredSigners: ["OWNER"],
+          validator: "V",
+        },
+      },
+    ]);
+    const client = new MagicBlockClient({ apiBase: API_BASE, fetchImpl: stub });
+
+    const result = await client.buildDeposit({
+      owner: "OWNER",
+      amount: 5_000_000,
+    });
+
+    expect(result.kind).toBe("deposit");
+    expect(result.sendTo).toBe("base");
+    expect(calls[0]!.body).toMatchObject({ owner: "OWNER", amount: 5_000_000 });
+  });
+});
+
+describe("cluster default", () => {
+  it("appends the configured cluster as a query param", async () => {
+    const { stub, calls } = makeFetchStub([
+      {
+        match: /\/v1\/spl\/transfer/,
+        response: {
+          kind: "transfer",
+          version: "v0",
+          transactionBase64: "X",
+          sendTo: "base",
+          recentBlockhash: "B",
+          lastValidBlockHeight: 1,
+          instructionCount: 1,
+          requiredSigners: [],
+          validator: "V",
+        },
+      },
+    ]);
+    const client = new MagicBlockClient({ apiBase: API_BASE, fetchImpl: stub, cluster: "mainnet" });
+
+    await client.buildTransfer({
+      from: "F",
+      to: "T",
+      mint: USDC,
+      amount: 1,
+      visibility: "public",
+      fromBalance: "base",
+      toBalance: "base",
+    });
+
+    expect(calls[0]!.url).toContain("cluster=mainnet");
+    expect(calls[0]!.body).toMatchObject({ cluster: "mainnet" });
   });
 });

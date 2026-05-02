@@ -13,7 +13,8 @@ async function main(): Promise<void> {
   const programId = process.env.BADGE_PROGRAM_ID;
   if (!programId) throw new Error("BADGE_PROGRAM_ID is required");
   const keypairPath = process.env.BADGE_AUTHORITY_KEYPAIR ?? `${process.env.HOME ?? process.env.USERPROFILE}/.config/solana/id.json`;
-  const rpcUrl = process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
+  // Prefer BADGE_RPC_URL — the network where the badge program is deployed.
+  const rpcUrl = process.env.BADGE_RPC_URL ?? process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 
   const secret = JSON.parse(fs.readFileSync(keypairPath, "utf8")) as number[];
   const authority = Keypair.fromSecretKey(Uint8Array.from(secret));

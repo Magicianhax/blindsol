@@ -10,8 +10,11 @@ export {
   MagicBlockApiError,
 } from "./types.js";
 export type {
-  DepositRequest,
+  Balance,
+  BuildDepositRequest,
+  BuildTransferRequest,
+  BuildWithdrawRequest,
   MagicBlockClientConfig,
-  TransferRequest,
+  TransferVisibility,
   UnsignedTransactionResponse,
 } from "./client.js";

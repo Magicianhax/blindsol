@@ -16,6 +16,13 @@ export interface StakeServiceConfig {
   mint: PublicKey;
   /** Per-post stake amount in raw token units (e.g. 100_000 = 0.1 USDC at 6 decimals). */
   perPostAmountRaw: bigint;
+  /**
+   * `mainnet` | `devnet` | a custom RPC URL. Forwarded to MagicBlock so it
+   * targets the correct cluster when looking up validators / vaults.
+   */
+  cluster?: string;
+  /** Memo string attached to each transfer for traceability. */
+  memo?: string;
 }
 
 export interface StakeReceipt {
@@ -36,67 +43,86 @@ export class StakeServiceError extends Error {
 }
 
 /**
- * Wraps the MagicBlock client to escrow a stake bond per post. The flow:
- *   1. Login (challenge → sign → bearer token), cached.
- *   2. Build an unsigned PRIVATE transfer from house → stake pool.
- *   3. Sign locally with the house keypair.
- *   4. Submit on Solana mainnet beta via the configured Connection.
- *   5. Wait for confirmation, return signature.
+ * Wraps the MagicBlock client to escrow a stake bond per post via a
+ * `visibility: "private"` base→base SPL transfer. The flow:
+ *   1. Build the unsigned tx (no auth required for base→base private route).
+ *   2. Sign locally with the house keypair.
+ *   3. Submit to Solana mainnet / configured cluster.
+ *   4. Wait for confirmation, return signature.
  */
 export class MagicBlockStakeService {
+  /** Whether the (mint, validator) ATAs/queues have been bootstrapped. */
+  private initialized = false;
+
   constructor(private readonly config: StakeServiceConfig) {}
 
-  /** Login + sanity-check the house wallet has funds. */
-  async initialize(): Promise<{ baseChainAmount: string; perAmount: string | null }> {
-    const session = await this.config.client.login();
-    console.log(`[stake] logged into MagicBlock as ${session.pubkey}`);
-
-    const onChain = await this.config.client.balance(this.config.mint.toBase58()).catch((err) => {
-      console.warn(`[stake] base-chain balance lookup failed: ${(err as Error).message}`);
-      return null;
-    });
-    let perBalance: string | null = null;
+  /**
+   * Sanity-check the house wallet has funds. Doesn't run an auth challenge —
+   * private base→base transfers don't need a bearer token.
+   */
+  async initialize(): Promise<{ baseChainAmount: string }> {
+    const housePub = this.config.houseKeypair.publicKey.toBase58();
+    let baseChainAmount = "0";
     try {
-      const pbal = await this.config.client.privateBalance(this.config.mint.toBase58());
-      perBalance = pbal.amount;
+      const bal = await this.config.client.balance({
+        address: housePub,
+        mint: this.config.mint.toBase58(),
+        ...(this.config.cluster ? { cluster: this.config.cluster } : {}),
+      });
+      baseChainAmount = bal.balance;
     } catch (err) {
-      console.warn(`[stake] private balance lookup failed: ${(err as Error).message}`);
+      console.warn(`[stake] base-chain balance lookup failed: ${describe(err)}`);
     }
 
-    const onChainAmount = onChain?.amount ?? "0";
-    if (onChainAmount === "0" && (perBalance ?? "0") === "0") {
+    if (baseChainAmount === "0") {
       console.warn(
-        `[stake] ⚠ house wallet ${session.pubkey} has 0 USDC. Fund it before posting will move real money.`,
+        `[stake] ⚠ house wallet ${housePub} has 0 USDC base balance. Posting will fail until it's funded.`,
       );
     } else {
-      console.log(`[stake] house base-chain USDC=${onChainAmount}, PER USDC=${perBalance ?? "?"}`);
+      console.log(`[stake] house base-chain USDC balance = ${baseChainAmount} (raw)`);
     }
-    return { baseChainAmount: onChainAmount, perAmount: perBalance };
+    return { baseChainAmount };
   }
 
   /**
    * Lock a stake bond for a new post. Builds → signs → submits a private
    * transfer of `perPostAmountRaw` USDC from the house wallet to the stake
    * pool. Returns the Solana tx signature once confirmed.
+   *
+   * The first call may include `initIfMissing` flags to bootstrap the
+   * validator-scoped queue + ATAs. Subsequent calls use the lean payload.
    */
   async lockStake(): Promise<StakeReceipt> {
     const recipient = this.config.stakePoolPubkey.toBase58();
-    const amountRaw = this.config.perPostAmountRaw.toString();
+    const amountRaw = this.config.perPostAmountRaw;
 
-    let unsigned: { transaction: string };
+    if (amountRaw > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new StakeServiceError(`stake amount ${amountRaw} exceeds JS safe integer`);
+    }
+    const amount = Number(amountRaw);
+
+    let unsigned;
     try {
       unsigned = await this.config.client.buildTransfer({
+        from: this.config.houseKeypair.publicKey.toBase58(),
+        to: recipient,
         mint: this.config.mint.toBase58(),
-        recipient,
-        amount: amountRaw,
-        private: true,
-        memo: "blindsol-stake-bond",
+        amount,
+        visibility: "private",
+        fromBalance: "base",
+        toBalance: "base",
+        // Only include heavy init flags on the very first transfer; afterwards
+        // the queue/vault/ATAs are already created.
+        initAtasIfMissing: !this.initialized,
+        ...(this.config.cluster ? { cluster: this.config.cluster } : {}),
+        ...(this.config.memo ? { memo: this.config.memo } : {}),
       });
+      this.initialized = true;
     } catch (err) {
       throw new StakeServiceError(`MagicBlock /v1/spl/transfer failed: ${describe(err)}`, err);
     }
 
-    const txBuf = Buffer.from(unsigned.transaction, "base64");
+    const txBuf = Buffer.from(unsigned.transactionBase64, "base64");
     let serialized: Uint8Array;
     try {
       serialized = signTransaction(txBuf, this.config.houseKeypair);
@@ -110,28 +136,35 @@ export class MagicBlockStakeService {
         skipPreflight: false,
         maxRetries: 3,
       });
-      await this.config.connection.confirmTransaction(signature, "confirmed");
+      await this.config.connection.confirmTransaction(
+        {
+          signature,
+          blockhash: unsigned.recentBlockhash,
+          lastValidBlockHeight: unsigned.lastValidBlockHeight,
+        },
+        "confirmed",
+      );
     } catch (err) {
       throw new StakeServiceError(`failed to submit transfer to Solana: ${describe(err)}`, err);
     }
 
     return {
       signature,
-      amountRaw,
+      amountRaw: amountRaw.toString(),
       recipient,
       privateSettlement: true,
     };
   }
 }
 
-/**
- * Sign a base64-decoded transaction (legacy or versioned) with the given keypair.
- * Returns the wire-ready serialized bytes.
- */
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Sign a base64-decoded transaction (legacy or versioned) with the given keypair.
+ * Returns the wire-ready serialized bytes.
+ */
 function signTransaction(buf: Buffer, signer: Keypair): Uint8Array {
   // Try VersionedTransaction first (the modern shape MagicBlock returns).
   try {
