@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, "../../../.env") });
 
+const fsMod = await import("node:fs");
 const { Connection, Keypair, PublicKey } = await import("@solana/web3.js");
 const bs58Mod = await import("bs58");
 const bs58 = bs58Mod.default;
@@ -15,6 +16,8 @@ const { getPerKeys } = await import("./per/keys.js");
 const { SolanaEvidenceVerifier } = await import("./per/evidence.js");
 const { BadgeIssuer } = await import("./per/issuer.js");
 const { MagicBlockStakeService } = await import("./magicblock/stake-service.js");
+const { OnChainBadgeRegistry, ownerCommitmentFromSeed } = await import("./badges/onchain.js");
+const { newAnonSeed } = await import("./per/token.js");
 
 const port = Number(process.env.API_PORT ?? 3001);
 const db = getDb();
@@ -25,11 +28,29 @@ if (!perKeys.secretKey) {
 
 const connection = new Connection(process.env.SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com", "confirmed");
 const evidence = new SolanaEvidenceVerifier(connection);
+
+// Optional on-chain badge minting via the deployed badge_registry program.
+const onChainRegistry = initOnChainRegistry();
+
 const badgeIssuer = new BadgeIssuer({
   db,
   evidence,
   perSecretKey: perKeys.secretKey,
   perPubkeyBase58: perKeys.publicKeyBase58,
+  ...(onChainRegistry
+    ? {
+        mintBadgeOnChain: async ({ kind }: { kind: string; walletBase58: string }) => {
+          // Owner commitment binds the badge to a fresh anon seed without
+          // exposing the wallet on-chain.
+          const seed = newAnonSeed();
+          const r = await onChainRegistry.mintBadge({
+            kind,
+            ownerCommitment: ownerCommitmentFromSeed(seed),
+          });
+          return r.badgePubkey;
+        },
+      }
+    : {}),
 });
 
 const stakeService = await initStakeService();
@@ -46,7 +67,32 @@ app.listen(port, () => {
   console.log(`[api] BlindSol API listening on :${port}`);
   console.log(`[api] PER attestation pubkey: ${perKeys.publicKeyBase58}`);
   console.log(`[api] MagicBlock stake escrow: ${stakeService ? "ENABLED" : "stubbed"}`);
+  console.log(`[api] On-chain badge minting:  ${onChainRegistry ? "ENABLED" : "stubbed"}`);
 });
+
+function initOnChainRegistry() {
+  const programId = process.env.BADGE_PROGRAM_ID;
+  if (!programId) return undefined;
+
+  const keypairPath = process.env.BADGE_AUTHORITY_KEYPAIR;
+  if (!keypairPath) {
+    console.warn("[api] BADGE_PROGRAM_ID set but BADGE_AUTHORITY_KEYPAIR missing — on-chain mint disabled");
+    return undefined;
+  }
+
+  try {
+    const secret = JSON.parse(fsMod.readFileSync(keypairPath, "utf8")) as number[];
+    const authority = Keypair.fromSecretKey(Uint8Array.from(secret));
+    return new OnChainBadgeRegistry({
+      connection,
+      programId: new PublicKey(programId),
+      authority,
+    });
+  } catch (err) {
+    console.warn(`[api] failed to load BADGE_AUTHORITY_KEYPAIR (${keypairPath}): ${(err as Error).message}`);
+    return undefined;
+  }
+}
 
 async function initStakeService() {
   if (process.env.MAGICBLOCK_ENABLED !== "true") return undefined;

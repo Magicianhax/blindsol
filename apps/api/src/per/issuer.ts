@@ -109,8 +109,8 @@ export class BadgeIssuer {
     if (this.deps.mintBadgeOnChain) {
       return this.deps.mintBadgeOnChain({ kind: req.kind, walletBase58: req.walletBase58 });
     }
-    // Stub mint: deterministic-looking opaque pubkey. Phase 10 swaps in a real
-    // Anchor program call and returns the actual mint pubkey.
+    // Stub mint: deterministic-looking opaque pubkey. When BADGE_PROGRAM_ID
+    // is set in env we swap this for a real on-chain mint via OnChainBadgeRegistry.
     return `stub_${req.kind}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   }
 }

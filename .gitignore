@@ -19,3 +19,9 @@ coverage
 # Solana
 keypair*.json
 !keypair.example.json
+
+# Rust / Anchor build artifacts
+/target/
+**/target/
+/test-ledger/
+.anchor/

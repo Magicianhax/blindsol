@@ -1,0 +1,21 @@
+[package]
+name = "badge-registry"
+version = "0.1.0"
+description = "BlindSol — anonymous badge registry on Solana with MagicBlock PER delegation"
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "badge_registry"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.30.1"
