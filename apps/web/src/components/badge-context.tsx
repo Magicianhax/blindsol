@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
 import {
   type BadgePurse,
   type StoredBadge,
@@ -63,6 +64,34 @@ export function BadgeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const active = useMemo(() => purseActive(purse), [purse]);
+
+  // Legacy badges in localStorage may pre-date the `anonId` field.
+  // Backfill them by asking /usernames/me which returns the server-derived
+  // anon for the bearer token. Once filled, persist back to the purse.
+  useEffect(() => {
+    let cancelled = false;
+    purse.badges
+      .filter((b) => !b.anonId)
+      .forEach(async (b) => {
+        try {
+          const r = await api.myUsername(b.badgeToken);
+          if (cancelled || !r.anonId) return;
+          const updated = purse.badges.map((x) =>
+            x.badgeId === b.badgeId ? { ...x, anonId: r.anonId } : x,
+          );
+          const next = { badges: updated, activeId: purse.activeId };
+          savePurse(next);
+          setPurse(next);
+        } catch {
+          // swallow — backfill is best-effort
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // re-run only when the badges list changes — not on every active toggle
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purse.badges.length]);
 
   const value: BadgeContextValue = {
     badges: purse.badges,

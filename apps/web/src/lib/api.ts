@@ -14,6 +14,8 @@ export interface Post {
   upCount?: number;
   downCount?: number;
   commentCount?: number;
+  /** LEFT-JOINed from `usernames`. Falsy if the author hasn't claimed one. */
+  displayName?: string | null;
 }
 
 export interface Comment {
@@ -28,6 +30,17 @@ export interface Comment {
   upCount?: number;
   downCount?: number;
   replyCount?: number;
+  displayName?: string | null;
+}
+
+export interface UserProfile {
+  anonId: string;
+  username: string | null;
+  badgeKind: string | null;
+  joinedAt: string | null;
+  postCount: number;
+  commentCount: number;
+  firstSeen: string | null;
 }
 
 export interface Reaction {
@@ -47,6 +60,7 @@ export interface ClaimResponse {
   onChainPubkey: string;
   badgeToken: string;
   expiresAt: number;
+  anonId: string;
 }
 
 export class ApiError extends Error {
@@ -153,6 +167,45 @@ export const api = {
       headers: authHeaders(token),
       body: JSON.stringify({ kind }),
     }),
+
+  // ── Usernames ───────────────────────────────────────────────────────
+  checkUsername: (name: string) =>
+    request<{ available: boolean; normalized?: string; reason?: string }>(
+      `/usernames/available?name=${encodeURIComponent(name)}`,
+    ),
+
+  claimUsername: (token: string, username: string) =>
+    request<{ username: string; anonId: string; badgeKind: string }>("/usernames", {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ username }),
+    }),
+
+  releaseUsername: (token: string) =>
+    request<{ released: string | null }>("/usernames", {
+      method: "DELETE",
+      headers: authHeaders(token),
+    }),
+
+  myUsername: (token: string) =>
+    request<{ username: string | null; anonId: string }>("/usernames/me", {
+      headers: authHeaders(token),
+    }),
+
+  // ── Public profiles ─────────────────────────────────────────────────
+  resolveHandle: (handle: string) =>
+    request<{ username: string | null; anonId: string; badgeKind?: string }>(
+      `/users/by-handle/${encodeURIComponent(handle)}`,
+    ),
+
+  getUser: (anonId: string) =>
+    request<UserProfile>(`/users/${encodeURIComponent(anonId)}`),
+
+  getUserPosts: (anonId: string) =>
+    request<{ posts: Post[] }>(`/users/${encodeURIComponent(anonId)}/posts`),
+
+  getUserComments: (anonId: string) =>
+    request<{ comments: Comment[] }>(`/users/${encodeURIComponent(anonId)}/comments`),
 };
 
 export const BADGE_LABELS: Record<string, string> = {

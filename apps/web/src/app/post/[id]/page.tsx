@@ -143,7 +143,16 @@ function ThreadDetail({
         <TokenIcon kind={post.badgeKind} size={26} />
         <span className="font-display text-lg text-ink">{symbol}</span>
         <span className="text-muted-2">·</span>
-        <span className="font-mono text-[12px]">{post.authorAnonId}</span>
+        <Link
+          href={`/u/${post.authorAnonId}`}
+          className="rounded px-1 transition hover:bg-surface-2 hover:text-ink"
+        >
+          {post.displayName ? (
+            <span className="font-display text-base text-ink">@{post.displayName}</span>
+          ) : (
+            <span className="font-mono text-[12px]">{post.authorAnonId}</span>
+          )}
+        </Link>
         <span className="text-muted-2">·</span>
         <span>{timeAgo(post.createdAt)}</span>
       </header>

@@ -88,6 +88,36 @@ export const preparedStakeBonds = pgTable(
 );
 
 /**
+ * Optional public handle for an anon_id. Lets users pick a memorable
+ * "@whaleboy420"-style display name without surrendering the wallet ↔
+ * anon mapping (which still lives in the TEE only).
+ *
+ * Keyed by `anonId`, never by wallet — so the privacy chain stays:
+ *   wallet  ──[TEE]──►  anon_id  ──[server-side]──►  username
+ *
+ * `UNIQUE(anon_id)`: an anon can hold one name at a time. Same wallet
+ * with $JUP and $BONK badges has two anon_ids and can pick two names —
+ * the multi-badge unlinkability is preserved (no shared display layer
+ * collapses the two identities back together).
+ */
+export const usernames = pgTable(
+  "usernames",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Lowercased canonical handle. Display in UI uses this as-is. */
+    username: text("username").notNull(),
+    anonId: text("anon_id").notNull(),
+    badgeKind: text("badge_kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_usernames_username").on(t.username),
+    uniqueIndex("uq_usernames_anon").on(t.anonId),
+    index("idx_usernames_badge").on(t.badgeKind),
+  ],
+);
+
+/**
  * Threaded comments on posts. Same anon mechanism as posts.
  */
 export const comments = pgTable(
@@ -245,3 +275,5 @@ export type AuditEvent = typeof auditEvents.$inferSelect;
 export type NewAuditEvent = typeof auditEvents.$inferInsert;
 export type PreparedStakeBondRow = typeof preparedStakeBonds.$inferSelect;
 export type NewPreparedStakeBondRow = typeof preparedStakeBonds.$inferInsert;
+export type Username = typeof usernames.$inferSelect;
+export type NewUsername = typeof usernames.$inferInsert;

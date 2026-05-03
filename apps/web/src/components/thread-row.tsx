@@ -108,7 +108,16 @@ export function ThreadRow({ post }: { post: Post }) {
             <span className="font-display text-base text-ink">{symbol}</span>
           </span>
           <Sep />
-          <span className="font-mono text-[12px]">{post.authorAnonId}</span>
+          <Link
+            href={`/u/${post.authorAnonId}`}
+            className="rounded px-1 transition hover:bg-surface-2 hover:text-ink"
+          >
+            {post.displayName ? (
+              <span className="font-display text-base text-ink">@{post.displayName}</span>
+            ) : (
+              <span className="font-mono text-[12px]">{post.authorAnonId}</span>
+            )}
+          </Link>
           <Sep />
           <span>{timeAgo(post.createdAt)}</span>
           <Sep />

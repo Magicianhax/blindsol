@@ -5,6 +5,8 @@ import type { StakeBondPipeline } from "./posts/stake-bond.js";
 import { badgesRouter } from "./routes/badges.js";
 import { postsRouter } from "./routes/posts.js";
 import { rpcRouter } from "./routes/rpc.js";
+import { usernamesRouter } from "./routes/usernames.js";
+import { usersRouter } from "./routes/users.js";
 
 // Bigint columns (e.g. stake_lamports) come back from Postgres as JS bigints.
 // JSON.stringify refuses bigints by default; serialize them as strings so
@@ -68,6 +70,9 @@ export function createApp(deps: AppDeps): Express {
       ...(deps.stakeBond ? { stakeBond: deps.stakeBond } : {}),
     }),
   );
+
+  app.use("/usernames", usernamesRouter({ db: deps.db, perPubkeyBase58: deps.perPubkeyBase58 }));
+  app.use("/users", usersRouter({ db: deps.db }));
 
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("[api]", err.stack ?? err);

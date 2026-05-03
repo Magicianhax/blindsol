@@ -67,6 +67,7 @@ export function ClaimDialog({
         label: result.label,
         badgeToken: result.badgeToken,
         expiresAt: result.expiresAt,
+        anonId: result.anonId,
       });
       onClose();
     } catch (e) {

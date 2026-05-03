@@ -91,17 +91,24 @@ export class BadgeIssuer {
 
     const now = (this.deps.now ?? (() => Math.floor(Date.now() / 1000)))();
     const exp = now + (this.deps.tokenTtlSeconds ?? DEFAULT_TTL_SECONDS);
+    const anonSeed = newAnonSeed();
     const badgeToken = signBadgeToken(
       {
         badgeId: inserted.id,
         kind: req.kind,
-        anonSeed: newAnonSeed(),
+        anonSeed,
         walletFingerprint: walletFingerprint(req.walletBase58),
         iat: now,
         exp,
       },
       this.deps.perSecretKey,
     );
+
+    // Derive the anon id server-side and ship it in the response so the
+    // client doesn't have to recompute the HMAC. Already-public info (it
+    // appears on every post the badge authors), so no new leak surface.
+    const { deriveAuthorAnonId } = await import("./anon.js");
+    const anonId = deriveAuthorAnonId(anonSeed, req.kind);
 
     return {
       badgeId: inserted.id,
@@ -110,6 +117,7 @@ export class BadgeIssuer {
       onChainPubkey,
       badgeToken,
       expiresAt: exp,
+      anonId,
     };
   }
 

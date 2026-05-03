@@ -29,6 +29,13 @@
       "when": 1777833776608,
       "tag": "0003_magenta_boom_boom",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777843801592,
+      "tag": "0004_unknown_polaris",
+      "breakpoints": true
     }
   ]
 }

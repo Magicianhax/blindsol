@@ -19,6 +19,10 @@ export interface StoredBadge {
   label: string;
   badgeToken: string;
   expiresAt: number;
+  /** Server-derived anon for this badge. Optional for legacy stored
+   *  badges that pre-date the field — components fall back to the badge
+   *  token's signed payload when missing. */
+  anonId?: string;
 }
 
 export interface BadgePurse {

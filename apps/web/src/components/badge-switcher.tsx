@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { TokenIcon } from "./token-icon";
 import { useBadge } from "./badge-context";
+import { UsernameDialog } from "./username-dialog";
 import { tokenFor } from "@/lib/tokens";
 
 interface BadgeSwitcherProps {
@@ -18,6 +20,7 @@ interface BadgeSwitcherProps {
 export function BadgeSwitcher({ onClaimMore }: BadgeSwitcherProps) {
   const { badges, active, setActive, removeBadge } = useBadge();
   const [open, setOpen] = useState(false);
+  const [usernameOpen, setUsernameOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -108,17 +111,36 @@ export function BadgeSwitcher({ onClaimMore }: BadgeSwitcherProps) {
               );
             })}
           </ul>
+          {active.anonId ? (
+            <Link
+              href={`/u/${active.anonId}`}
+              onClick={() => setOpen(false)}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-ink px-3 py-1.5 font-display text-base text-ink transition hover:bg-crayon-yellow"
+            >
+              view profile →
+            </Link>
+          ) : null}
+          <button
+            onClick={() => {
+              setOpen(false);
+              setUsernameOpen(true);
+            }}
+            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-ink px-3 py-1.5 font-display text-base text-ink transition hover:bg-crayon-yellow"
+          >
+            pick a handle
+          </button>
           <button
             onClick={() => {
               setOpen(false);
               onClaimMore();
             }}
-            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-ink px-3 py-1.5 font-display text-base text-ink transition hover:bg-crayon-yellow"
+            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-ink px-3 py-1.5 font-display text-base text-ink transition hover:bg-crayon-yellow"
           >
             + claim another badge
           </button>
         </div>
       )}
+      {usernameOpen && <UsernameDialog onClose={() => setUsernameOpen(false)} />}
     </div>
   );
 }

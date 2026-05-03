@@ -36,7 +36,9 @@ const finalizeBody = z.object({
 });
 
 /** Public projection of `posts` — strips `stake_tx_signature`-shaped
- *  fields that could leak the wallet via on-chain RPC lookup. */
+ *  fields that could leak the wallet via on-chain RPC lookup, and
+ *  LEFT-JOINs `usernames` so the client gets `displayName` (or null) in
+ *  one query without exposing any extra leak vectors. */
 const publicPostColumns = {
   id: schema.posts.id,
   authorAnonId: schema.posts.authorAnonId,
@@ -52,6 +54,24 @@ const publicPostColumns = {
   createdAt: schema.posts.createdAt,
   updatedAt: schema.posts.updatedAt,
   deletedAt: schema.posts.deletedAt,
+  displayName: schema.usernames.username,
+} as const;
+
+const publicCommentColumns = {
+  id: schema.comments.id,
+  postId: schema.comments.postId,
+  parentId: schema.comments.parentId,
+  authorAnonId: schema.comments.authorAnonId,
+  badgeKind: schema.comments.badgeKind,
+  content: schema.comments.content,
+  perAttestation: schema.comments.perAttestation,
+  upCount: schema.comments.upCount,
+  downCount: schema.comments.downCount,
+  replyCount: schema.comments.replyCount,
+  createdAt: schema.comments.createdAt,
+  updatedAt: schema.comments.updatedAt,
+  deletedAt: schema.comments.deletedAt,
+  displayName: schema.usernames.username,
 } as const;
 
 /** Canonical hashable form: `${title}\n${body}`. Title alone is fine. */
@@ -95,18 +115,17 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
       const badge = typeof req.query.badge === "string" ? req.query.badge : undefined;
       const limit = Math.min(Number(req.query.limit ?? 50) || 50, 100);
 
+      const baseQuery = deps.db
+        .select(publicPostColumns)
+        .from(schema.posts)
+        .leftJoin(schema.usernames, eq(schema.usernames.anonId, schema.posts.authorAnonId));
+
       const rows = badge
-        ? await deps.db
-            .select(publicPostColumns)
-            .from(schema.posts)
+        ? await baseQuery
             .where(eq(schema.posts.badgeKind, badge))
             .orderBy(desc(schema.posts.createdAt))
             .limit(limit)
-        : await deps.db
-            .select(publicPostColumns)
-            .from(schema.posts)
-            .orderBy(desc(schema.posts.createdAt))
-            .limit(limit);
+        : await baseQuery.orderBy(desc(schema.posts.createdAt)).limit(limit);
 
       res.json({ posts: rows });
     } catch (err) {
@@ -120,6 +139,7 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
       const [post] = await deps.db
         .select(publicPostColumns)
         .from(schema.posts)
+        .leftJoin(schema.usernames, eq(schema.usernames.anonId, schema.posts.authorAnonId))
         .where(eq(schema.posts.id, id))
         .limit(1);
       if (!post) {
@@ -128,8 +148,9 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
       }
       const [postComments, postReactions] = await Promise.all([
         deps.db
-          .select()
+          .select(publicCommentColumns)
           .from(schema.comments)
+          .leftJoin(schema.usernames, eq(schema.usernames.anonId, schema.comments.authorAnonId))
           .where(eq(schema.comments.postId, id))
           .orderBy(asc(schema.comments.createdAt)),
         deps.db.select().from(schema.reactions).where(eq(schema.reactions.postId, id)),

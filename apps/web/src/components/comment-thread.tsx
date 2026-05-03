@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { api, type Comment } from "@/lib/api";
 import { tokenFor } from "@/lib/tokens";
@@ -152,7 +153,16 @@ function CommentNode({
         <TokenIcon kind={comment.badgeKind} size={20} />
         <span className="font-display text-base text-ink">{symbol}</span>
         <span className="text-muted-2">·</span>
-        <span className="font-mono text-[12px]">{comment.authorAnonId}</span>
+        <Link
+          href={`/u/${comment.authorAnonId}`}
+          className="rounded px-1 transition hover:bg-surface-2 hover:text-ink"
+        >
+          {comment.displayName ? (
+            <span className="font-display text-base text-ink">@{comment.displayName}</span>
+          ) : (
+            <span className="font-mono text-[12px]">{comment.authorAnonId}</span>
+          )}
+        </Link>
         <span className="text-muted-2">·</span>
         <span>{timeAgo(comment.createdAt)}</span>
         <button onClick={onReply} className="ml-auto rounded px-1.5 py-0.5 font-display text-base transition hover:bg-surface-2 hover:text-ink">
@@ -183,7 +193,16 @@ function ChildComment({ comment }: { comment: Comment }) {
         <TokenIcon kind={comment.badgeKind} size={18} />
         <span className="font-display text-base text-ink">{symbol}</span>
         <span className="text-muted-2">·</span>
-        <span className="font-mono text-[12px]">{comment.authorAnonId}</span>
+        <Link
+          href={`/u/${comment.authorAnonId}`}
+          className="rounded px-1 transition hover:bg-surface-2 hover:text-ink"
+        >
+          {comment.displayName ? (
+            <span className="font-display text-base text-ink">@{comment.displayName}</span>
+          ) : (
+            <span className="font-mono text-[12px]">{comment.authorAnonId}</span>
+          )}
+        </Link>
         <span className="text-muted-2">·</span>
         <span>{timeAgo(comment.createdAt)}</span>
       </header>
