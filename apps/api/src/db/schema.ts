@@ -1,14 +1,16 @@
-import { pgTable, uuid, text, timestamp, bigint, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, uuid, text, timestamp, bigint, integer, pgEnum, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 
 /**
- * Badges issued by the TEE after verifying a holdings or employment claim.
+ * Badges issued by the TEE after verifying token holdings.
  * Notice: NO wallet column. The wallet ↔ badge link only exists inside PER.
  */
 export const badges = pgTable("badges", {
   id: uuid("id").primaryKey().defaultRandom(),
-  kind: text("kind").notNull(), // 'jup_holder' | 'sol_foundation' | 'anthropic_eng' | etc.
-  onChainPubkey: text("on_chain_pubkey").notNull(), // badge NFT mint on Solana
+  kind: text("kind").notNull(),
+  onChainPubkey: text("on_chain_pubkey").notNull(),
+  /** Anchor program signature for the on-chain mint_badge call. */
+  mintTxSignature: text("mint_tx_signature"),
   issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -16,22 +18,40 @@ export const reactionKind = pgEnum("reaction_kind", ["up", "down", "spam"]);
 
 /**
  * Anonymous posts. Authored by a TEE-derived anon_id, never by a wallet.
+ *
+ * Forum-shaped: each post has a title (the thread heading) and a body
+ * (`content`). Title is nullable for backwards compat with rows created
+ * before we split the fields; new posts always supply both.
  */
 export const posts = pgTable(
   "posts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     authorAnonId: text("author_anon_id").notNull(),
-    badgeKind: text("badge_kind").notNull(), // denormalized for cheap reads
+    badgeKind: text("badge_kind").notNull(),
+    /** Thread title — the headline shown in feed lists. Nullable for legacy rows. */
+    title: text("title"),
+    /** Thread body. Optional alongside a title. */
     content: text("content").notNull(),
-    contentHash: text("content_hash").notNull(), // SHA-256 of content, anchored on-chain
-    perAttestation: text("per_attestation").notNull(), // TEE signature over (post_id, anon_id, content_hash)
+    /** sha256 over `${title ?? ""}\n${content}`; binds the receipt at /finalize. */
+    contentHash: text("content_hash").notNull(),
+    perAttestation: text("per_attestation").notNull(),
     stakeLamports: bigint("stake_lamports", { mode: "bigint" }).notNull(),
+    /** MagicBlock private-transfer Solana tx that paid the stake bond. */
+    stakeTxSignature: text("stake_tx_signature"),
+    /** Denormalized counters; kept in sync by route handlers. Cheap reads. */
+    upCount: integer("up_count").notNull().default(0),
+    downCount: integer("down_count").notNull().default(0),
+    commentCount: integer("comment_count").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Soft delete — preserves attestation chain even after content removal. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [
     index("idx_posts_author_anon").on(t.authorAnonId),
     index("idx_posts_badge_created").on(t.badgeKind, t.createdAt),
+    index("idx_posts_created").on(t.createdAt),
   ],
 );
 
@@ -50,7 +70,12 @@ export const comments = pgTable(
     badgeKind: text("badge_kind").notNull(),
     content: text("content").notNull(),
     perAttestation: text("per_attestation").notNull(),
+    upCount: integer("up_count").notNull().default(0),
+    downCount: integer("down_count").notNull().default(0),
+    replyCount: integer("reply_count").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [
     index("idx_comments_post").on(t.postId, t.createdAt),
@@ -59,38 +84,120 @@ export const comments = pgTable(
 );
 
 /**
- * Reactions: upvote / downvote / spam-flag. Unique per (post, anon, kind).
+ * Reactions: upvote / downvote / spam-flag for posts AND comments.
+ *
+ * Polymorphic via two nullable FKs — exactly one of `post_id` or `comment_id`
+ * is set per row (enforced by a CHECK constraint added in the migration).
+ * Two partial unique indexes prevent the same anon from reacting twice with
+ * the same kind to the same subject.
  */
 export const reactions = pgTable(
   "reactions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    postId: uuid("post_id")
-      .notNull()
-      .references(() => posts.id, { onDelete: "cascade" }),
+    postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }),
+    commentId: uuid("comment_id").references(() => comments.id, { onDelete: "cascade" }),
     reactorAnonId: text("reactor_anon_id").notNull(),
     kind: reactionKind("kind").notNull(),
     perAttestation: text("per_attestation").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("uq_reactions_post_anon_kind").on(t.postId, t.reactorAnonId, t.kind),
     index("idx_reactions_post").on(t.postId),
+    index("idx_reactions_comment").on(t.commentId),
+    uniqueIndex("uq_reactions_post_anon_kind")
+      .on(t.postId, t.reactorAnonId, t.kind)
+      .where(sql`${t.postId} IS NOT NULL`),
+    uniqueIndex("uq_reactions_comment_anon_kind")
+      .on(t.commentId, t.reactorAnonId, t.kind)
+      .where(sql`${t.commentId} IS NOT NULL`),
   ],
 );
+
+/**
+ * Spam / moderation flags submitted by users. Distinct from reactions so we
+ * can attach a reason and a resolution state.
+ */
+export const flagStatus = pgEnum("flag_status", ["open", "dismissed", "actioned"]);
+
+export const flags = pgTable(
+  "flags",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }),
+    commentId: uuid("comment_id").references(() => comments.id, { onDelete: "cascade" }),
+    flaggerAnonId: text("flagger_anon_id").notNull(),
+    reason: text("reason").notNull(),
+    status: flagStatus("status").notNull().default("open"),
+    perAttestation: text("per_attestation").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("idx_flags_post").on(t.postId),
+    index("idx_flags_comment").on(t.commentId),
+    index("idx_flags_status").on(t.status),
+  ],
+);
+
+/**
+ * Audit log of every state-changing API action. Append-only; useful for
+ * debugging, analytics, and proving moderation actions to disputed users.
+ */
+export const auditEventKind = pgEnum("audit_event_kind", [
+  "badge_issued",
+  "post_created",
+  "comment_created",
+  "reaction_created",
+  "flag_created",
+  "post_deleted",
+]);
+
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: auditEventKind("kind").notNull(),
+    /** The thing that changed (post id, comment id, badge id, etc). */
+    subjectId: text("subject_id").notNull(),
+    /** Anon id of the actor when known; null for system events. */
+    actorAnonId: text("actor_anon_id"),
+    badgeKind: text("badge_kind"),
+    /** Free-form metadata: tx signatures, content hash, reason codes. */
+    meta: text("meta"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_audit_kind_created").on(t.kind, t.createdAt),
+    index("idx_audit_subject").on(t.subjectId),
+  ],
+);
+
+// ─── Relations ──────────────────────────────────────────────────────
 
 export const postsRelations = relations(posts, ({ many }) => ({
   comments: many(comments),
   reactions: many(reactions),
+  flags: many(flags),
 }));
 
-export const commentsRelations = relations(comments, ({ one }) => ({
+export const commentsRelations = relations(comments, ({ one, many }) => ({
   post: one(posts, { fields: [comments.postId], references: [posts.id] }),
+  reactions: many(reactions),
+  flags: many(flags),
 }));
 
 export const reactionsRelations = relations(reactions, ({ one }) => ({
   post: one(posts, { fields: [reactions.postId], references: [posts.id] }),
+  comment: one(comments, { fields: [reactions.commentId], references: [comments.id] }),
 }));
+
+export const flagsRelations = relations(flags, ({ one }) => ({
+  post: one(posts, { fields: [flags.postId], references: [posts.id] }),
+  comment: one(comments, { fields: [flags.commentId], references: [comments.id] }),
+}));
+
+// ─── Types ──────────────────────────────────────────────────────────
 
 export type Badge = typeof badges.$inferSelect;
 export type NewBadge = typeof badges.$inferInsert;
@@ -100,3 +207,7 @@ export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
 export type Reaction = typeof reactions.$inferSelect;
 export type NewReaction = typeof reactions.$inferInsert;
+export type Flag = typeof flags.$inferSelect;
+export type NewFlag = typeof flags.$inferInsert;
+export type AuditEvent = typeof auditEvents.$inferSelect;
+export type NewAuditEvent = typeof auditEvents.$inferInsert;

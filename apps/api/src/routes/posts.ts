@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type Router as ExpressRouter } from "express";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { type DB, schema } from "../db/index.js";
 import { deriveAuthorAnonId } from "../per/anon.js";
@@ -21,14 +21,24 @@ export interface PostsRouterDeps {
 }
 
 const prepareBody = z.object({
-  content: z.string().min(1).max(2000),
+  title: z.string().min(1).max(160),
+  content: z.string().max(2000).default(""),
   fromWallet: z.string().min(32).max(44),
 });
 
 const finalizeBody = z.object({
   receipt: z.string().min(16),
   txSignature: z.string().min(32).max(128),
+  title: z.string().min(1).max(160),
+  content: z.string().max(2000).default(""),
 });
+
+/** Canonical hashable form: `${title}\n${body}`. Title alone is fine. */
+function canonicalText(title: string, content: string): string {
+  const t = title.trim();
+  const c = content.trim();
+  return c.length === 0 ? t : `${t}\n${c}`;
+}
 
 const createCommentBody = z.object({
   content: z.string().min(1).max(2000),
@@ -115,7 +125,8 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
       }
 
       const postId = randomUUID();
-      const contentHash = sha256Hex(parsed.data.content);
+      const canonical = canonicalText(parsed.data.title, parsed.data.content);
+      const contentHash = sha256Hex(canonical);
 
       if (!deps.stakeBond) {
         res.status(503).json({
@@ -134,6 +145,7 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
 
       res.status(200).json({
         postId,
+        title: parsed.data.title,
         content: parsed.data.content,
         contentHash,
         stakeBond: prepared,
@@ -163,26 +175,12 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
         return;
       }
 
-      // Need the original content too — we re-hash and verify it matches the
-      // receipt the server signed during /prepare.
-      const fullBody = z
-        .object({
-          receipt: z.string(),
-          txSignature: z.string(),
-          content: z.string().min(1).max(2000),
-        })
-        .safeParse(req.body);
-      if (!fullBody.success) {
-        res.status(400).json({ error: "invalid_request", details: fullBody.error.flatten() });
-        return;
-      }
-
       let receiptPayload;
       try {
         receiptPayload = await deps.stakeBond.verifyOnChain({
-          receipt: fullBody.data.receipt,
+          receipt: parsed.data.receipt,
           perPubkeyBase58: deps.perPubkeyBase58,
-          txSignature: fullBody.data.txSignature,
+          txSignature: parsed.data.txSignature,
         });
       } catch (err) {
         if (err instanceof StakeBondError) {
@@ -192,7 +190,8 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
         throw err;
       }
 
-      const recomputedHash = sha256Hex(fullBody.data.content);
+      const canonical = canonicalText(parsed.data.title, parsed.data.content);
+      const recomputedHash = sha256Hex(canonical);
       if (recomputedHash !== receiptPayload.contentHash) {
         res.status(400).json({ error: "content_changed_since_prepare" });
         return;
@@ -219,15 +218,28 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
           id: receiptPayload.postId,
           authorAnonId,
           badgeKind: session.token.kind,
-          content: fullBody.data.content,
+          title: parsed.data.title,
+          content: parsed.data.content,
           contentHash: receiptPayload.contentHash,
           perAttestation: attestation.signature,
           stakeLamports: BigInt(receiptPayload.expectedAmountRaw),
+          stakeTxSignature: parsed.data.txSignature,
         })
         .returning();
       if (!inserted) throw new Error("failed to insert post");
 
-      res.status(201).json({ post: inserted, stakeTxSignature: fullBody.data.txSignature });
+      await deps.db.insert(schema.auditEvents).values({
+        kind: "post_created",
+        subjectId: inserted.id,
+        actorAnonId: authorAnonId,
+        badgeKind: session.token.kind,
+        meta: JSON.stringify({
+          stakeTxSignature: parsed.data.txSignature,
+          stakeLamports: receiptPayload.expectedAmountRaw,
+        }),
+      });
+
+      res.status(201).json({ post: inserted, stakeTxSignature: parsed.data.txSignature });
     } catch (err) {
       next(err);
     }
@@ -294,6 +306,26 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
         })
         .returning();
       if (!inserted) throw new Error("failed to insert comment");
+
+      // Bump the parent's reply counters.
+      await deps.db
+        .update(schema.posts)
+        .set({ commentCount: sql`${schema.posts.commentCount} + 1`, updatedAt: new Date() })
+        .where(eq(schema.posts.id, postId));
+      if (parsed.data.parentId) {
+        await deps.db
+          .update(schema.comments)
+          .set({ replyCount: sql`${schema.comments.replyCount} + 1`, updatedAt: new Date() })
+          .where(eq(schema.comments.id, parsed.data.parentId));
+      }
+
+      await deps.db.insert(schema.auditEvents).values({
+        kind: "comment_created",
+        subjectId: inserted.id,
+        actorAnonId: authorAnonId,
+        badgeKind: session.token.kind,
+        meta: JSON.stringify({ postId, parentId: parsed.data.parentId ?? null }),
+      });
 
       res.status(201).json({ comment: inserted });
     } catch (err) {
@@ -363,6 +395,124 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
         })
         .returning();
       if (!inserted) throw new Error("failed to insert reaction");
+
+      // Bump the post's denormalized counters so feed reads stay cheap.
+      if (kind === "up") {
+        await deps.db
+          .update(schema.posts)
+          .set({ upCount: sql`${schema.posts.upCount} + 1`, updatedAt: new Date() })
+          .where(eq(schema.posts.id, postId));
+      } else if (kind === "down") {
+        await deps.db
+          .update(schema.posts)
+          .set({ downCount: sql`${schema.posts.downCount} + 1`, updatedAt: new Date() })
+          .where(eq(schema.posts.id, postId));
+      }
+
+      await deps.db.insert(schema.auditEvents).values({
+        kind: "reaction_created",
+        subjectId: inserted.id,
+        actorAnonId: reactorAnonId,
+        badgeKind: session.token.kind,
+        meta: JSON.stringify({ postId, reactionKind: kind }),
+      });
+
+      res.status(201).json({ reaction: inserted, created: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // ─── Comment-level reactions ───────────────────────────────────────
+  // Symmetric with /:id/reactions but the subject is a comment. Uses
+  // the same `reactions` table via the polymorphic `comment_id` column.
+
+  router.post("/comments/:commentId/reactions", async (req, res, next) => {
+    try {
+      const session = authOrRespond(req, res, deps.perPubkeyBase58);
+      if (!session) return;
+
+      const parsed = createReactionBody.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "invalid_request", details: parsed.error.flatten() });
+        return;
+      }
+
+      const commentId = req.params.commentId;
+      const [comment] = await deps.db
+        .select()
+        .from(schema.comments)
+        .where(eq(schema.comments.id, commentId))
+        .limit(1);
+      if (!comment) {
+        res.status(404).json({ error: "comment_not_found" });
+        return;
+      }
+
+      const reactorAnonId = deriveAuthorAnonId(session.token.anonSeed, session.token.kind);
+      const kind = parsed.data.kind;
+
+      const existingRows = await deps.db
+        .select()
+        .from(schema.reactions)
+        .where(
+          and(
+            eq(schema.reactions.commentId, commentId),
+            eq(schema.reactions.reactorAnonId, reactorAnonId),
+            eq(schema.reactions.kind, kind),
+          ),
+        )
+        .limit(1);
+      if (existingRows[0]) {
+        res.status(200).json({ reaction: existingRows[0], created: false });
+        return;
+      }
+
+      const reactionId = randomUUID();
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const attestation = signAttestationForDev(
+        {
+          action: "reaction",
+          anonId: reactorAnonId,
+          badgeKind: session.token.kind,
+          resourceId: `comment:${commentId}:${kind}`,
+          contentHash: "",
+          issuedAt,
+        },
+        deps.perSecretKey,
+      );
+
+      const [inserted] = await deps.db
+        .insert(schema.reactions)
+        .values({
+          id: reactionId,
+          commentId,
+          reactorAnonId,
+          kind,
+          perAttestation: attestation.signature,
+        })
+        .returning();
+      if (!inserted) throw new Error("failed to insert comment reaction");
+
+      if (kind === "up") {
+        await deps.db
+          .update(schema.comments)
+          .set({ upCount: sql`${schema.comments.upCount} + 1`, updatedAt: new Date() })
+          .where(eq(schema.comments.id, commentId));
+      } else if (kind === "down") {
+        await deps.db
+          .update(schema.comments)
+          .set({ downCount: sql`${schema.comments.downCount} + 1`, updatedAt: new Date() })
+          .where(eq(schema.comments.id, commentId));
+      }
+
+      await deps.db.insert(schema.auditEvents).values({
+        kind: "reaction_created",
+        subjectId: inserted.id,
+        actorAnonId: reactorAnonId,
+        badgeKind: session.token.kind,
+        meta: JSON.stringify({ commentId, reactionKind: kind }),
+      });
 
       res.status(201).json({ reaction: inserted, created: true });
     } catch (err) {

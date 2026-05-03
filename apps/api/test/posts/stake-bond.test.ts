@@ -107,7 +107,7 @@ describe("StakeBondPipeline.verifyOnChain", () => {
     const prepared = await pipeline.prepare({
       postId: "p-1",
       contentHash: sha256Hex("x"),
-      fromWallet: "W",
+      fromWallet: "11111111111111111111111111111112",
       perSecretKey: per.secret,
     });
 
@@ -153,7 +153,7 @@ describe("StakeBondPipeline.verifyOnChain", () => {
     const prepared = await pipeline.prepare({
       postId: "p-2",
       contentHash: sha256Hex("y"),
-      fromWallet: "W",
+      fromWallet: "11111111111111111111111111111112",
       perSecretKey: per.secret,
     });
 
@@ -175,10 +175,10 @@ describe("StakeBondPipeline.verifyOnChain", () => {
           err: null,
           logMessages: ['Program log: Memo (len 36): "post-3"'],
           preTokenBalances: [
-            { owner: STAKE_POOL.toBase58(), mint: USDC.toBase58(), uiTokenAmount: { amount: "0" } },
+            { owner: "11111111111111111111111111111112", mint: USDC.toBase58(), uiTokenAmount: { amount: "100000" } },
           ],
           postTokenBalances: [
-            { owner: STAKE_POOL.toBase58(), mint: USDC.toBase58(), uiTokenAmount: { amount: "100000" } },
+            { owner: "11111111111111111111111111111112", mint: USDC.toBase58(), uiTokenAmount: { amount: "0" } },
           ],
         },
         transaction: { message: { instructions: [] } },
@@ -207,7 +207,7 @@ describe("StakeBondPipeline.verifyOnChain", () => {
     const prepared = await pipeline.prepare({
       postId: "post-3",
       contentHash: sha256Hex("z"),
-      fromWallet: "W",
+      fromWallet: "11111111111111111111111111111112",
       perSecretKey: per.secret,
     });
 
@@ -228,8 +228,8 @@ describe("StakeBondPipeline.verifyOnChain", () => {
         meta: {
           err: null,
           logMessages: ['Program log: Memo (len 36): "post-4"'],
-          preTokenBalances: [{ owner: STAKE_POOL.toBase58(), mint: USDC.toBase58(), uiTokenAmount: { amount: "0" } }],
-          postTokenBalances: [{ owner: STAKE_POOL.toBase58(), mint: USDC.toBase58(), uiTokenAmount: { amount: "1000" } }],
+          preTokenBalances: [{ owner: "11111111111111111111111111111112", mint: USDC.toBase58(), uiTokenAmount: { amount: "1000" } }],
+          postTokenBalances: [{ owner: "11111111111111111111111111111112", mint: USDC.toBase58(), uiTokenAmount: { amount: "0" } }],
         },
         transaction: { message: { instructions: [] } },
       }),
@@ -256,7 +256,7 @@ describe("StakeBondPipeline.verifyOnChain", () => {
     const prepared = await pipeline.prepare({
       postId: "post-4",
       contentHash: sha256Hex("z"),
-      fromWallet: "W",
+      fromWallet: "11111111111111111111111111111112",
       perSecretKey: per.secret,
     });
 
@@ -266,6 +266,6 @@ describe("StakeBondPipeline.verifyOnChain", () => {
         perPubkeyBase58: per.pubB58,
         txSignature: "sig",
       }),
-    ).rejects.toThrow(/stake amount too low/);
+    ).rejects.toThrow(/stake debit too low/);
   });
 });

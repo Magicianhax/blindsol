@@ -1,27 +1,64 @@
+# Dependencies & build outputs
 node_modules
 dist
 build
 .next
 .turbo
 coverage
+.cache
 
+# TypeScript incremental compile info (regenerated on each build)
+*.tsbuildinfo
+
+# Lint / tool caches
+.eslintcache
+.pnpm-store
+.npm
+
+# Environment files (.env.example is committed)
 .env
 .env.local
 .env.*.local
 
+# Logs & process artifacts
 *.log
+*.pid
+*.pid.lock
+*.seed
+
+# OS noise
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor noise
 .idea
+.history
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+*.swp
+*.swo
+*.bak
+*.tmp
 
-# Solana
+# Python (build-icons.py, build-diagrams.py)
+__pycache__/
+*.pyc
+*.pyo
+.venv
+venv
+.python-version
+
+# Solana / Anchor
 keypair*.json
 !keypair.example.json
-
-# Rust / Anchor build artifacts
 /target/
 **/target/
 /test-ledger/
 .anchor/
+
+# Local notes that shouldn't ship
+frontier.txt
+ideafrommagicblockteam.txt
+tasks/

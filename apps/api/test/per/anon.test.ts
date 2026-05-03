@@ -19,7 +19,7 @@ describe("deriveAuthorAnonId", () => {
 
   it("differs across kinds for the same seed", () => {
     const a = deriveAuthorAnonId(seedA, "jup_holder");
-    const b = deriveAuthorAnonId(seedA, "anthropic_eng");
+    const b = deriveAuthorAnonId(seedA, "bonk_holder");
     expect(a).not.toBe(b);
   });
 

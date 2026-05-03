@@ -37,7 +37,7 @@ function makeEnv() {
   return { db, app, perPubB58 };
 }
 
-async function claim(app: any, kind: "jup_holder" | "anthropic_eng" = "jup_holder"): Promise<string> {
+async function claim(app: any, kind: "jup_holder" | "bonk_holder" = "jup_holder"): Promise<string> {
   const wallet = Keypair.generate();
   const challenge = `claim ${kind} ${Date.now()} ${Math.random()}`;
   const sig = bs58.encode(nacl.sign.detached(new TextEncoder().encode(challenge), wallet.secretKey));
@@ -122,7 +122,7 @@ describeIfDb("POST /posts/:id/comments", () => {
 
   it("creates a threaded reply when parentId is provided", async () => {
     const tokenA = await claim(env.app);
-    const tokenB = await claim(env.app, "anthropic_eng");
+    const tokenB = await claim(env.app, "bonk_holder");
     const postId = await makePost(env, tokenA);
     const top = await request(env.app)
       .post(`/posts/${postId}/comments`)

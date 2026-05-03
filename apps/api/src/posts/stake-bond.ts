@@ -178,11 +178,15 @@ export class StakeBondPipeline {
       throw new StakeBondError(`transaction memo does not match post id`);
     }
 
-    const settled = settledAmountToRecipient(tx, this.cfg.mint, this.cfg.stakePool);
+    // For PRIVATE transfers, USDC settles into MagicBlock's PER vault — not
+    // into the recipient's base-layer ATA. So we verify by checking that the
+    // SENDER was debited by at least the expected amount.
+    const fromKey = new PublicKey(payload.fromWallet);
+    const debited = senderDebit(tx, this.cfg.mint, fromKey);
     const expected = BigInt(payload.expectedAmountRaw);
-    if (settled < expected) {
+    if (debited < expected) {
       throw new StakeBondError(
-        `stake amount too low: settled=${settled} expected≥${expected}`,
+        `stake debit too low: debited=${debited} expected≥${expected}`,
       );
     }
 
@@ -266,29 +270,34 @@ function txCarriesMemo(
   return false;
 }
 
-function settledAmountToRecipient(
+/**
+ * How much SPL `mint` left the sender's token accounts in this tx. Used to
+ * verify private transfers: the recipient's base-layer ATA never receives
+ * funds (settlement happens inside the PER), so we check the sender debit.
+ */
+function senderDebit(
   tx: ParsedTransactionWithMeta | TransactionResponse,
   mint: PublicKey,
-  recipient: PublicKey,
+  sender: PublicKey,
 ): bigint {
   const pre = tx.meta?.preTokenBalances ?? [];
   const post = tx.meta?.postTokenBalances ?? [];
-  const recipientStr = recipient.toBase58();
+  const senderStr = sender.toBase58();
   const mintStr = mint.toBase58();
 
   let preAmount = 0n;
   for (const b of pre) {
-    if (b.owner === recipientStr && b.mint === mintStr) {
+    if (b.owner === senderStr && b.mint === mintStr) {
       preAmount = BigInt(b.uiTokenAmount.amount);
     }
   }
   let postAmount = 0n;
   for (const b of post) {
-    if (b.owner === recipientStr && b.mint === mintStr) {
+    if (b.owner === senderStr && b.mint === mintStr) {
       postAmount = BigInt(b.uiTokenAmount.amount);
     }
   }
-  return postAmount > preAmount ? postAmount - preAmount : 0n;
+  return preAmount > postAmount ? preAmount - postAmount : 0n;
 }
 
 function base64UrlEncode(buf: Buffer): string {

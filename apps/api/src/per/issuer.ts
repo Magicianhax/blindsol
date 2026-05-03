@@ -81,6 +81,14 @@ export class BadgeIssuer {
       .returning({ id: schema.badges.id });
     if (!inserted) throw new BadgeIssuanceError("failed to record badge in DB");
 
+    await this.deps.db.insert(schema.auditEvents).values({
+      kind: "badge_issued",
+      subjectId: inserted.id,
+      actorAnonId: null,
+      badgeKind: req.kind,
+      meta: JSON.stringify({ onChainPubkey }),
+    });
+
     const now = (this.deps.now ?? (() => Math.floor(Date.now() / 1000)))();
     const exp = now + (this.deps.tokenTtlSeconds ?? DEFAULT_TTL_SECONDS);
     const badgeToken = signBadgeToken(

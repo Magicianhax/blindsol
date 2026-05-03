@@ -167,13 +167,13 @@ describeIfDb("GET /badges/:id", () => {
     const claim = signedClaim("test challenge for read");
     const issued = await request(env.app)
       .post("/badges/claim")
-      .send({ ...claim, kind: "anthropic_eng" });
+      .send({ ...claim, kind: "bonk_holder" });
     expect(issued.status).toBe(201);
 
     const res = await request(env.app).get(`/badges/${issued.body.badgeId}`);
     expect(res.status).toBe(200);
-    expect(res.body.kind).toBe("anthropic_eng");
-    expect(res.body.label).toBe("Anthropic engineer");
+    expect(res.body.kind).toBe("bonk_holder");
+    expect(res.body.label).toBe("verified $BONK holder");
     expect(res.body.id).toBe(issued.body.badgeId);
   });
 });

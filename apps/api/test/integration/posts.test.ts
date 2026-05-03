@@ -64,7 +64,7 @@ describeIfDb("GET /posts (integration, real DB)", () => {
         },
         {
           authorAnonId: "anon_b",
-          badgeKind: "anthropic_eng",
+          badgeKind: "bonk_holder",
           content: "second post (newer)",
           contentHash: "h2",
           perAttestation: "att2",
@@ -95,7 +95,7 @@ describeIfDb("GET /posts (integration, real DB)", () => {
       },
       {
         authorAnonId: "anon_b",
-        badgeKind: "anthropic_eng",
+        badgeKind: "bonk_holder",
         content: "anthropic post",
         contentHash: "h2",
         perAttestation: "att2",
@@ -161,7 +161,7 @@ describeIfDb("GET /posts/:id (integration, real DB)", () => {
     await db.insert(schema.comments).values({
       postId: post.id,
       authorAnonId: "anon_b",
-      badgeKind: "anthropic_eng",
+      badgeKind: "bonk_holder",
       content: "first reply",
       perAttestation: "att2",
     });

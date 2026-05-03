@@ -1,7 +1,7 @@
 import { Router, type Router as ExpressRouter } from "express";
 import { z } from "zod";
 import { BadgeIssuanceError, BadgeIssuer, getBadgeById } from "../per/issuer.js";
-import { BADGE_LABELS, type BadgeKind } from "../per/evidence.js";
+import { BADGE_KINDS, BADGE_LABELS, type BadgeKind } from "../per/evidence.js";
 
 export interface BadgeRouterDeps {
   issuer: BadgeIssuer;
@@ -10,7 +10,7 @@ export interface BadgeRouterDeps {
 
 const claimBody = z.object({
   wallet: z.string().min(32).max(44),
-  kind: z.enum(["jup_holder", "sol_foundation", "anthropic_eng"]),
+  kind: z.enum(BADGE_KINDS as readonly [BadgeKind, ...BadgeKind[]]),
   challenge: z.string().min(8).max(256),
   signature: z.string().min(64).max(128),
 });

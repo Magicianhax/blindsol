@@ -68,6 +68,7 @@ const app = createApp({
   perSecretKey: perKeys.secretKey,
   ...(stakeBond ? { stakeBond } : {}),
   rpcUrls: { mainnet: mainnetRpc, badge: badgeRpc },
+  mainnetRpcUpstream: mainnetRpc,
 });
 
 app.listen(port, () => {

@@ -4,11 +4,16 @@ export interface Post {
   id: string;
   authorAnonId: string;
   badgeKind: string;
+  /** Thread headline. Nullable for legacy rows posted before the title column. */
+  title: string | null;
   content: string;
   contentHash: string;
   perAttestation: string;
   stakeLamports: string;
   createdAt: string;
+  upCount?: number;
+  downCount?: number;
+  commentCount?: number;
 }
 
 export interface Comment {
@@ -20,11 +25,15 @@ export interface Comment {
   content: string;
   perAttestation: string;
   createdAt: string;
+  upCount?: number;
+  downCount?: number;
+  replyCount?: number;
 }
 
 export interface Reaction {
   id: string;
-  postId: string;
+  postId: string | null;
+  commentId: string | null;
   reactorAnonId: string;
   kind: "up" | "down" | "spam";
   perAttestation: string;
@@ -91,9 +100,10 @@ export const api = {
   getPost: (id: string) =>
     request<{ post: Post; comments: Comment[]; reactions: Reaction[] }>(`/posts/${id}`),
 
-  preparePost: (token: string, args: { content: string; fromWallet: string }) =>
+  preparePost: (token: string, args: { title: string; content: string; fromWallet: string }) =>
     request<{
       postId: string;
+      title: string;
       content: string;
       contentHash: string;
       stakeBond: {
@@ -116,7 +126,7 @@ export const api = {
       body: JSON.stringify(args),
     }),
 
-  finalizePost: (token: string, args: { receipt: string; txSignature: string; content: string }) =>
+  finalizePost: (token: string, args: { receipt: string; txSignature: string; title: string; content: string }) =>
     request<{ post: Post; stakeTxSignature: string }>("/posts/finalize", {
       method: "POST",
       headers: authHeaders(token),
@@ -136,10 +146,27 @@ export const api = {
       headers: authHeaders(token),
       body: JSON.stringify({ kind }),
     }),
+
+  reactComment: (token: string, commentId: string, kind: "up" | "down" | "spam") =>
+    request<{ reaction: Reaction; created: boolean }>(`/posts/comments/${commentId}/reactions`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ kind }),
+    }),
 };
 
 export const BADGE_LABELS: Record<string, string> = {
   jup_holder: "verified $JUP holder",
-  sol_foundation: "Solana Foundation employee",
-  anthropic_eng: "Anthropic engineer",
+  drift_holder: "verified $DRIFT holder",
+  kmno_holder: "verified $KMNO holder",
+  ray_holder: "verified $RAY holder",
+  orca_holder: "verified $ORCA holder",
+  tnsr_holder: "verified $TNSR holder",
+  bonk_holder: "verified $BONK holder",
+  wif_holder: "verified $WIF holder",
+  popcat_holder: "verified $POPCAT holder",
+  mew_holder: "verified $MEW holder",
+  pyth_holder: "verified $PYTH holder",
+  hnt_holder: "verified $HNT holder",
+  rndr_holder: "verified $RNDR holder",
 };

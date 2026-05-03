@@ -1,46 +1,45 @@
 "use client";
 
-import { useWallet } from "@solana/wallet-adapter-react";
-import { useCallback, useState } from "react";
+import { usePrivy } from "@privy-io/react-auth";
+import { useWallets } from "@privy-io/react-auth/solana";
 
+/**
+ * Replaces the Solana wallet-adapter "Connect" button. Privy handles the
+ * picker UX (email / Google / external wallet) on click.
+ */
 export function ConnectButton() {
-  const { publicKey, connected, connecting, connect, disconnect, select, wallet, wallets } = useWallet();
-  const [busy, setBusy] = useState(false);
+  const { ready, authenticated, login, logout } = usePrivy();
+  const { wallets } = useWallets();
+  const wallet = wallets[0];
 
-  const onClick = useCallback(async () => {
-    setBusy(true);
-    try {
-      if (connected) {
-        await disconnect();
-        return;
-      }
-      // Default to Phantom if it's available.
-      if (!wallet) {
-        const phantom = wallets.find((w) => w.adapter.name === "Phantom");
-        if (phantom) select(phantom.adapter.name);
-      }
-      await connect();
-    } catch (err) {
-      console.error("[wallet] connect error:", err);
-    } finally {
-      setBusy(false);
-    }
-  }, [connect, connected, disconnect, select, wallet, wallets]);
+  if (!ready) {
+    return (
+      <button disabled className="scribble-btn opacity-60">
+        <span className="font-mono text-sm">…</span>
+      </button>
+    );
+  }
 
-  const label = busy || connecting
-    ? "Connecting…"
-    : connected && publicKey
-      ? `${publicKey.toBase58().slice(0, 4)}…${publicKey.toBase58().slice(-4)}`
-      : "Connect wallet";
+  if (!authenticated || !wallet) {
+    return (
+      <button onClick={login} className="scribble-btn scribble-btn--primary">
+        Connect
+      </button>
+    );
+  }
+
+  const addr = wallet.address;
+  const short = `${addr.slice(0, 4)}…${addr.slice(-4)}`;
 
   return (
     <button
       type="button"
-      onClick={onClick}
-      disabled={busy || connecting}
-      className="rounded-md border border-border bg-panel px-3 py-1.5 text-sm font-mono hover:border-accent hover:text-accent transition"
+      onClick={logout}
+      className="scribble-btn"
+      title="Click to disconnect"
     >
-      {label}
+      <span className="h-2 w-2 rounded-full bg-crayon-green" />
+      <span className="font-mono text-sm">{short}</span>
     </button>
   );
 }

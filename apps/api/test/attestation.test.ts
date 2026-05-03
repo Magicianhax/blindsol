@@ -101,11 +101,11 @@ describe("attestation", () => {
     const m = canonicalMessage({
       action: "comment",
       anonId: "anon_x",
-      badgeKind: "anthropic_eng",
+      badgeKind: "bonk_holder",
       resourceId: "post-7",
       contentHash: "h",
       issuedAt: 42,
     });
-    expect(m).toBe("comment|anon_x|anthropic_eng|post-7|h|42");
+    expect(m).toBe("comment|anon_x|bonk_holder|post-7|h|42");
   });
 });
