@@ -1,0 +1,32 @@
+# Heavy directories the build doesn't need
+node_modules
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/build
+**/coverage
+target
+**/target
+.anchor
+test-ledger
+
+# Local-only files
+.env
+.env.local
+**/.env.local
+
+# Editor noise
+.idea
+.vscode
+.history
+
+# Git data
+.git
+.gitignore
+.dockerignore
+
+# Notes
+frontier.txt
+ideafrommagicblockteam.txt
+tasks
