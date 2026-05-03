@@ -160,37 +160,53 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
             ) : null}
           </div>
 
-          {current ? (
-            <div className="mb-4 rounded-lg border-2 border-ink bg-crayon-yellow/30 px-3 py-2">
-              <div className="font-display text-base text-ink">currently @{current}</div>
+          {current === undefined ? (
+            // Still loading the existing-handle lookup. Don't show input or
+            // "you have @x" yet — avoids flashing the picker for a user
+            // who actually has a name set.
+            <p className="text-sm text-muted">checking…</p>
+          ) : current ? (
+            // Already has a handle — schema enforces one per anon. Force
+            // release-first instead of letting them type into a doomed input.
+            <div className="rounded-lg border-2 border-ink bg-crayon-yellow/30 px-4 py-4">
+              <div className="font-display text-xl text-ink">
+                you already post as <span className="font-mono">@{current}</span>
+              </div>
+              <p className="mt-1 text-sm text-text-2">
+                One handle per badge. Release this one before picking a different name — your
+                existing posts will revert to displaying the anon hash.
+              </p>
               <button
                 onClick={release}
                 disabled={busy}
-                className="mt-1 text-xs text-crayon-red underline disabled:opacity-50"
+                className="scribble-btn scribble-btn--red mt-3"
               >
-                release this name
+                {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+                {busy ? "releasing…" : `release @${current}`}
               </button>
             </div>
-          ) : null}
-
-          <label className="block text-sm text-text-2" htmlFor="handle-input">
-            new handle
-          </label>
-          <div className="mt-1 flex items-center gap-2">
-            <span className="font-display text-2xl text-muted">@</span>
-            <input
-              id="handle-input"
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="whaleboy420"
-              autoComplete="off"
-              maxLength={20}
-              disabled={busy}
-              className="scribble-input flex-1"
-            />
-          </div>
-          <AvailabilityHint state={avail} />
+          ) : (
+            <>
+              <label className="block text-sm text-text-2" htmlFor="handle-input">
+                new handle
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="font-display text-2xl text-muted">@</span>
+                <input
+                  id="handle-input"
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="whaleboy420"
+                  autoComplete="off"
+                  maxLength={20}
+                  disabled={busy}
+                  className="scribble-input flex-1"
+                />
+              </div>
+              <AvailabilityHint state={avail} />
+            </>
+          )}
 
           {err && (
             <div className="mt-3 rounded-lg border-2 border-crayon-red bg-crayon-red/10 px-3 py-1.5 text-sm text-crayon-red">
@@ -200,16 +216,21 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
 
           <div className="mt-5 flex justify-end gap-2">
             <button onClick={onClose} className="scribble-btn scribble-btn--ghost">
-              nevermind
+              {current ? "close" : "nevermind"}
             </button>
-            <button
-              onClick={claim}
-              disabled={busy || avail.kind !== "available"}
-              className="scribble-btn scribble-btn--primary"
-            >
-              {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
-              {busy ? "claiming…" : "claim handle"}
-            </button>
+            {/* Hide claim button when the user already has a handle —
+                schema enforces one-per-anon, so the button can't succeed
+                until they release. */}
+            {current ? null : (
+              <button
+                onClick={claim}
+                disabled={busy || avail.kind !== "available"}
+                className="scribble-btn scribble-btn--primary"
+              >
+                {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+                {busy ? "claiming…" : "claim handle"}
+              </button>
+            )}
           </div>
         </div>
       </div>
