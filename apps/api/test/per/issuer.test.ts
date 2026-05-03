@@ -10,13 +10,20 @@ import request from "supertest";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, "../../../../.env") });
 
+// See test/_setup/db-isolation.ts. Tests must never run against the prod DB.
+if (process.env.DATABASE_URL_TEST) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
+} else {
+  delete process.env.DATABASE_URL;
+}
+
 const { createApp } = await import("../../src/app.js");
 const { getDb, closeDb, schema } = await import("../../src/db/index.js");
 const { BadgeIssuer } = await import("../../src/per/issuer.js");
 const { StubEvidenceVerifier } = await import("../../src/per/evidence.js");
 const { verifyBadgeToken } = await import("../../src/per/token.js");
 
-const haveDb = !!process.env.DATABASE_URL;
+const haveDb = !!process.env.DATABASE_URL_TEST;
 const describeIfDb = haveDb ? describe : describe.skip;
 
 function makeIssuerEnv() {

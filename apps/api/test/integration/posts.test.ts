@@ -7,10 +7,20 @@ import request from "supertest";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: path.resolve(__dirname, "../../../../.env") });
 
+// Use the dedicated test DB only — never the prod URL, even if it's set.
+// `_setup/db-isolation.ts` validates the two are not equal before any test
+// loads, but we re-anchor here so a test file's own loadEnv() can't drag
+// DATABASE_URL back from .env after the setup ran.
+if (process.env.DATABASE_URL_TEST) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
+} else {
+  delete process.env.DATABASE_URL;
+}
+
 const { createApp } = await import("../../src/app.js");
 const { getDb, closeDb, schema } = await import("../../src/db/index.js");
 
-const haveDb = !!process.env.DATABASE_URL;
+const haveDb = !!process.env.DATABASE_URL_TEST;
 const describeIfDb = haveDb ? describe : describe.skip;
 
 // Single shared DB / app across all tests in this file. The pool is closed
