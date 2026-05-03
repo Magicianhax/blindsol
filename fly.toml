@@ -22,9 +22,10 @@ primary_region = "iad"   # US-East (Ashburn). Change if you prefer EU/West.
     soft_limit = 50
     hard_limit = 100
 
-# Single shared-CPU machine fits comfortably in Fly's free allowance
-# (3 × shared-cpu-1x with 256 MB).
+# 512MB — Node + tsx + @solana/web3.js + pg pool peaks just above 256MB
+# under request load and gets OOM-killed at the lower tier. Fly's $5
+# monthly credit covers a 512MB shared-cpu-1x running 24/7.
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256
+  memory_mb = 512
