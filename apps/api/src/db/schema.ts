@@ -37,8 +37,6 @@ export const posts = pgTable(
     contentHash: text("content_hash").notNull(),
     perAttestation: text("per_attestation").notNull(),
     stakeLamports: bigint("stake_lamports", { mode: "bigint" }).notNull(),
-    /** MagicBlock private-transfer Solana tx that paid the stake bond. */
-    stakeTxSignature: text("stake_tx_signature"),
     /** Denormalized counters; kept in sync by route handlers. Cheap reads. */
     upCount: integer("up_count").notNull().default(0),
     downCount: integer("down_count").notNull().default(0),
@@ -52,6 +50,40 @@ export const posts = pgTable(
     index("idx_posts_author_anon").on(t.authorAnonId),
     index("idx_posts_badge_created").on(t.badgeKind, t.createdAt),
     index("idx_posts_created").on(t.createdAt),
+  ],
+);
+
+/**
+ * Server-side receipts for the prepare/finalize stake-bond pipeline.
+ *
+ * Privacy goal: the user's wallet must never travel back through the user
+ * after /prepare. The previous design returned a signed receipt blob that
+ * embedded `fromWallet` in plaintext base64 — anyone holding that blob (a
+ * compromised browser, a malicious extension, a logging proxy) could pull
+ * the wallet out. Now /prepare stores the wallet here, returns only the
+ * row id (uuid) as the opaque receipt, and /finalize looks up the row.
+ *
+ * `consumed_at` prevents replay: once /finalize succeeds the row is marked
+ * consumed, so the same prepare cannot be redeemed twice.
+ */
+export const preparedStakeBonds = pgTable(
+  "prepared_stake_bonds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    postId: uuid("post_id").notNull().unique(),
+    /** Stays in the DB; never returned to clients. */
+    fromWallet: text("from_wallet").notNull(),
+    contentHash: text("content_hash").notNull(),
+    expectedAmountRaw: text("expected_amount_raw").notNull(),
+    expectedRecipient: text("expected_recipient").notNull(),
+    /** HMAC-derived memo string. Server compares against on-chain memo. */
+    memo: text("memo").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_prep_expires").on(t.expiresAt),
   ],
 );
 
@@ -211,3 +243,5 @@ export type Flag = typeof flags.$inferSelect;
 export type NewFlag = typeof flags.$inferInsert;
 export type AuditEvent = typeof auditEvents.$inferSelect;
 export type NewAuditEvent = typeof auditEvents.$inferInsert;
+export type PreparedStakeBondRow = typeof preparedStakeBonds.$inferSelect;
+export type NewPreparedStakeBondRow = typeof preparedStakeBonds.$inferInsert;

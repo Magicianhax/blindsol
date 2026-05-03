@@ -2,13 +2,12 @@ import {
   Connection,
   ParsedTransactionWithMeta,
   PublicKey,
-  VersionedTransaction,
   type TransactionResponse,
 } from "@solana/web3.js";
-import bs58 from "bs58";
-import nacl from "tweetnacl";
+import { and, eq, isNull } from "drizzle-orm";
 import { createHash, createHmac } from "node:crypto";
 import type { MagicBlockClient } from "@blindsol/magicblock-client";
+import { type DB, schema } from "../db/index.js";
 
 /**
  * Stake-bond pipeline.
@@ -18,7 +17,14 @@ import type { MagicBlockClient } from "@blindsol/magicblock-client";
  * private transfer, sign it with Phantom, submit it to mainnet, then
  * *finalize* the post with the resulting tx signature. The API verifies
  * the tx is real, settles to the right pool with the right amount, and
- * carries our memo (the postId) before inserting the post row.
+ * carries our memo (HMAC of the postId) before inserting the post row.
+ *
+ * Privacy properties guarded here:
+ *   1. Memo on-chain is HMAC(perSecret, postId), not the postId itself —
+ *      so an outside observer can't link wallet→post by reading the memo.
+ *   2. The receipt returned to the user is an opaque uuid; the wallet
+ *      address stays in our DB and never round-trips through the browser.
+ *   3. The receipt row's `consumed_at` prevents replay.
  */
 
 const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
@@ -26,6 +32,7 @@ const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfc
 export interface StakeBondPipelineConfig {
   client: MagicBlockClient;
   connection: Connection;
+  db: DB;
   /** Where stake bonds settle. Receive-only — we never need its secret key. */
   stakePool: PublicKey;
   /** SPL mint to escrow (USDC by default). */
@@ -42,7 +49,7 @@ export interface PreparedStakeBond {
   postId: string;
   /** sha256 of the post content the user typed. */
   contentHash: string;
-  /** Memo the user must include in the transfer (== postId). */
+  /** Memo the user must include in the transfer (HMAC, not the postId). */
   memo: string;
   /** Base-unit amount the user must transfer. */
   expectedAmountRaw: string;
@@ -55,23 +62,23 @@ export interface PreparedStakeBond {
   requiredSigners: string[];
   validator: string;
   /**
-   * Server-signed receipt the user echoes back on /finalize. Binds together
-   * (postId, contentHash, walletFrom, expected amount/recipient/memo, exp)
-   * so the user can't post different content than what they staked for.
+   * Opaque uuid the user echoes back on /finalize. The wallet/HMAC payload
+   * lives in `prepared_stake_bonds` keyed by this id; nothing about the
+   * sender escapes the server.
    */
-  receipt: string;
+  receiptId: string;
   expiresAt: number;
 }
 
-export interface PreparedStakeReceipt {
+/** Internal — what the DB row looks like once resolved. */
+export interface ResolvedReceipt {
   postId: string;
   contentHash: string;
   fromWallet: string;
   expectedAmountRaw: string;
   expectedRecipient: string;
   memo: string;
-  iat: number;
-  exp: number;
+  expiresAt: Date;
 }
 
 export class StakeBondError extends Error {
@@ -81,15 +88,14 @@ export class StakeBondError extends Error {
   }
 }
 
-const RECEIPT_VERSION = "blindsol-sb-v1";
-
 export class StakeBondPipeline {
   constructor(private readonly cfg: StakeBondPipelineConfig) {}
 
   /**
    * Build an unsigned MagicBlock private transfer for the user's wallet to
-   * sign. Also returns a server-signed receipt the user must hand back on
-   * finalize so we can prove the amount/recipient/memo never changed.
+   * sign. Persists the prepare context (wallet, memo, expected amount) to
+   * `prepared_stake_bonds` and returns just the row id as the opaque
+   * receipt — the wallet never travels back to the user.
    */
   async prepare(args: {
     postId: string;
@@ -97,7 +103,7 @@ export class StakeBondPipeline {
     fromWallet: string;
     perSecretKey: Uint8Array;
   }): Promise<PreparedStakeBond> {
-    const memo = args.postId;
+    const memo = hmacMemo(args.postId, args.perSecretKey);
     const amount = Number(this.cfg.minAmountRaw);
     if (BigInt(amount) !== this.cfg.minAmountRaw) {
       throw new StakeBondError("min amount exceeds JS safe integer");
@@ -113,57 +119,59 @@ export class StakeBondPipeline {
       toBalance: "base",
       cluster: this.cfg.cluster,
       memo,
-      // Atas-create only on the very first transfer for this (mint,
-      // validator) pair; subsequent calls hit the lean payload path.
-      // Conservative default: include initAtasIfMissing — idempotent if ATAs
-      // already exist. This keeps the system self-healing.
       initAtasIfMissing: true,
     });
 
-    const now = Math.floor(Date.now() / 1000);
-    const exp = now + (this.cfg.ttlSeconds ?? 300);
-    const receiptPayload: PreparedStakeReceipt = {
-      postId: args.postId,
-      contentHash: args.contentHash,
-      fromWallet: args.fromWallet,
-      expectedAmountRaw: this.cfg.minAmountRaw.toString(),
-      expectedRecipient: this.cfg.stakePool.toBase58(),
-      memo,
-      iat: now,
-      exp,
-    };
-    const receipt = signReceipt(receiptPayload, args.perSecretKey);
+    const ttlSec = this.cfg.ttlSeconds ?? 300;
+    const expiresAt = new Date(Date.now() + ttlSec * 1000);
+
+    const [inserted] = await this.cfg.db
+      .insert(schema.preparedStakeBonds)
+      .values({
+        postId: args.postId,
+        fromWallet: args.fromWallet,
+        contentHash: args.contentHash,
+        expectedAmountRaw: this.cfg.minAmountRaw.toString(),
+        expectedRecipient: this.cfg.stakePool.toBase58(),
+        memo,
+        expiresAt,
+      })
+      .returning();
+    if (!inserted) throw new StakeBondError("failed to persist prepared stake bond");
 
     return {
       postId: args.postId,
       contentHash: args.contentHash,
       memo,
-      expectedAmountRaw: receiptPayload.expectedAmountRaw,
-      expectedRecipient: receiptPayload.expectedRecipient,
+      expectedAmountRaw: this.cfg.minAmountRaw.toString(),
+      expectedRecipient: this.cfg.stakePool.toBase58(),
       unsignedTransactionBase64: built.transactionBase64,
       recentBlockhash: built.recentBlockhash,
       lastValidBlockHeight: built.lastValidBlockHeight,
       requiredSigners: built.requiredSigners,
       validator: built.validator,
-      receipt,
-      expiresAt: exp,
+      receiptId: inserted.id,
+      expiresAt: Math.floor(expiresAt.getTime() / 1000),
     };
   }
 
   /**
-   * Verify the user's signed transaction landed on chain, debits ≥ the
-   * stake bond amount toward the stake pool, and carries our memo. Returns
-   * the canonical receipt for storage on the post row.
+   * Resolve the opaque receipt id, verify the on-chain tx debits the right
+   * wallet by ≥ expected amount and carries our HMAC memo, and mark the
+   * receipt consumed so it can't be replayed.
    */
   async verifyOnChain(args: {
-    receipt: string;
-    perPubkeyBase58: string;
+    receiptId: string;
     txSignature: string;
-  }): Promise<PreparedStakeReceipt> {
-    const payload = verifyReceipt(args.receipt, args.perPubkeyBase58);
-
-    const now = Math.floor(Date.now() / 1000);
-    if (now > payload.exp) throw new StakeBondError("stake-bond receipt expired");
+  }): Promise<ResolvedReceipt> {
+    const [row] = await this.cfg.db
+      .select()
+      .from(schema.preparedStakeBonds)
+      .where(eq(schema.preparedStakeBonds.id, args.receiptId))
+      .limit(1);
+    if (!row) throw new StakeBondError("unknown receipt id");
+    if (row.consumedAt) throw new StakeBondError("receipt already consumed");
+    if (row.expiresAt.getTime() <= Date.now()) throw new StakeBondError("receipt expired");
 
     const tx = await this.cfg.connection.getParsedTransaction(args.txSignature, {
       maxSupportedTransactionVersion: 0,
@@ -174,70 +182,55 @@ export class StakeBondPipeline {
       throw new StakeBondError(`transaction failed: ${JSON.stringify(tx.meta.err)}`);
     }
 
-    if (!txCarriesMemo(tx, payload.memo)) {
-      throw new StakeBondError(`transaction memo does not match post id`);
+    if (!txCarriesMemo(tx, row.memo)) {
+      throw new StakeBondError("transaction memo does not match prepare");
     }
 
-    // For PRIVATE transfers, USDC settles into MagicBlock's PER vault — not
-    // into the recipient's base-layer ATA. So we verify by checking that the
-    // SENDER was debited by at least the expected amount.
-    const fromKey = new PublicKey(payload.fromWallet);
+    // Private transfers settle into the PER vault, not the recipient ATA,
+    // so verify by checking that the SENDER was debited by ≥ expected.
+    const fromKey = new PublicKey(row.fromWallet);
     const debited = senderDebit(tx, this.cfg.mint, fromKey);
-    const expected = BigInt(payload.expectedAmountRaw);
+    const expected = BigInt(row.expectedAmountRaw);
     if (debited < expected) {
       throw new StakeBondError(
         `stake debit too low: debited=${debited} expected≥${expected}`,
       );
     }
 
-    return payload;
+    // Mark consumed atomically so a concurrent /finalize for the same
+    // receipt id can't both succeed.
+    const consumedAt = new Date();
+    const updated = await this.cfg.db
+      .update(schema.preparedStakeBonds)
+      .set({ consumedAt })
+      .where(
+        and(
+          eq(schema.preparedStakeBonds.id, args.receiptId),
+          isNull(schema.preparedStakeBonds.consumedAt),
+        ),
+      )
+      .returning();
+    if (updated.length === 0) {
+      // Lost the race — another finalize already consumed the receipt.
+      throw new StakeBondError("receipt already consumed");
+    }
+
+    return {
+      postId: row.postId,
+      contentHash: row.contentHash,
+      fromWallet: row.fromWallet,
+      expectedAmountRaw: row.expectedAmountRaw,
+      expectedRecipient: row.expectedRecipient,
+      memo: row.memo,
+      expiresAt: row.expiresAt,
+    };
   }
 }
 
-// ─── Receipt signing/verification ─────────────────────────────────────
+// ─── Memo derivation ──────────────────────────────────────────────────
 
-function canonicalReceipt(p: PreparedStakeReceipt): string {
-  return [
-    RECEIPT_VERSION,
-    p.postId,
-    p.contentHash,
-    p.fromWallet,
-    p.expectedAmountRaw,
-    p.expectedRecipient,
-    p.memo,
-    p.iat,
-    p.exp,
-  ].join("|");
-}
-
-function signReceipt(payload: PreparedStakeReceipt, secretKey: Uint8Array): string {
-  const msg = new TextEncoder().encode(canonicalReceipt(payload));
-  const sig = nacl.sign.detached(msg, secretKey);
-  const b64 = base64UrlEncode(Buffer.from(JSON.stringify(payload), "utf8"));
-  return `${RECEIPT_VERSION}.${b64}.${bs58.encode(sig)}`;
-}
-
-export function verifyReceipt(receipt: string, perPubkeyBase58: string): PreparedStakeReceipt {
-  const parts = receipt.split(".");
-  if (parts.length !== 3 || parts[0] !== RECEIPT_VERSION) {
-    throw new StakeBondError("malformed stake-bond receipt");
-  }
-  const [, b64, sigB58] = parts;
-  let payload: PreparedStakeReceipt;
-  try {
-    payload = JSON.parse(Buffer.from(base64UrlDecode(b64!)).toString("utf8")) as PreparedStakeReceipt;
-  } catch {
-    throw new StakeBondError("receipt payload not parseable");
-  }
-  const msg = new TextEncoder().encode(canonicalReceipt(payload));
-  const sig = bs58.decode(sigB58!);
-  const pub = bs58.decode(perPubkeyBase58);
-  if (sig.length !== 64) throw new StakeBondError("receipt sig length");
-  if (pub.length !== 32) throw new StakeBondError("receipt pubkey length");
-  if (!nacl.sign.detached.verify(msg, sig, pub)) {
-    throw new StakeBondError("receipt signature invalid");
-  }
-  return payload;
+function hmacMemo(postId: string, perSecretKey: Uint8Array): string {
+  return createHmac("sha256", Buffer.from(perSecretKey)).update(postId).digest("hex");
 }
 
 // ─── On-chain inspection helpers ──────────────────────────────────────
@@ -246,16 +239,11 @@ function txCarriesMemo(
   tx: ParsedTransactionWithMeta | TransactionResponse,
   memo: string,
 ): boolean {
-  // Memo program emits its inner data via inner instructions / log messages.
-  // We accept either an explicit memo program instruction matching, or the
-  // program log line which Solana Memo posts: "Program log: Memo (len <n>): \"<text>\""
   const logs = tx.meta?.logMessages ?? [];
   for (const line of logs) {
     if (line.includes(`"${memo}"`)) return true;
-    // Some MagicBlock variants log without quotes.
     if (line.includes(memo)) return true;
   }
-
   const messageInstructions =
     "transaction" in tx && "message" in tx.transaction
       ? "instructions" in tx.transaction.message
@@ -300,24 +288,6 @@ function senderDebit(
   return preAmount > postAmount ? preAmount - postAmount : 0n;
 }
 
-function base64UrlEncode(buf: Buffer): string {
-  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function base64UrlDecode(s: string): Buffer {
-  const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
-  const normalized = s.replace(/-/g, "+").replace(/_/g, "/") + pad;
-  return Buffer.from(normalized, "base64");
-}
-
 export function sha256Hex(input: string): string {
   return createHash("sha256").update(input).digest("hex");
-}
-
-export function deriveStakeMemo(postId: string, perSecretKey: Uint8Array): string {
-  // Currently we just use the postId as the memo. Reserved for future
-  // schemes (e.g. HMAC of postId) without changing call sites.
-  void perSecretKey;
-  void createHmac; // imported for future use
-  return postId;
 }

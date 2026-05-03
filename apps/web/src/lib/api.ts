@@ -117,7 +117,7 @@ export const api = {
         lastValidBlockHeight: number;
         requiredSigners: string[];
         validator: string;
-        receipt: string;
+        receiptId: string;
         expiresAt: number;
       };
     }>("/posts/prepare", {
@@ -126,8 +126,8 @@ export const api = {
       body: JSON.stringify(args),
     }),
 
-  finalizePost: (token: string, args: { receipt: string; txSignature: string; title: string; content: string }) =>
-    request<{ post: Post; stakeTxSignature: string }>("/posts/finalize", {
+  finalizePost: (token: string, args: { receiptId: string; txSignature: string; title: string; content: string }) =>
+    request<{ post: Post }>("/posts/finalize", {
       method: "POST",
       headers: authHeaders(token),
       body: JSON.stringify(args),

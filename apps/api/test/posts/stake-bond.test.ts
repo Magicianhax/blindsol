@@ -1,22 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import bs58 from "bs58";
-import nacl from "tweetnacl";
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
-import {
-  StakeBondError,
-  StakeBondPipeline,
-  sha256Hex,
-  verifyReceipt,
-} from "../../src/posts/stake-bond.js";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { StakeBondError, StakeBondPipeline, sha256Hex } from "../../src/posts/stake-bond.js";
 import type { MagicBlockClient } from "@blindsol/magicblock-client";
+import type { DB } from "../../src/db/index.js";
 
 const STAKE_POOL = new PublicKey("FArDvPVnE9JLHPQwzUXeqRkHuirBwuSwNKQJvDx1pwtZ");
 const USDC = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
-function freshPerKeys(): { secret: Uint8Array; pubB58: string } {
-  const kp = nacl.sign.keyPair();
-  return { secret: kp.secretKey, pubB58: bs58.encode(kp.publicKey) };
-}
+const PER_SECRET = new Uint8Array(64).fill(7); // deterministic test secret
 
 function fakeClient(buildTransfer: any): MagicBlockClient {
   return { buildTransfer } as unknown as MagicBlockClient;
@@ -26,8 +17,78 @@ function fakeConnection(getParsedTransaction: any = vi.fn()): Connection {
   return { getParsedTransaction } as unknown as Connection;
 }
 
+/**
+ * Minimal in-memory fake of the Drizzle DB interface used by the
+ * StakeBondPipeline. Drizzle conditions (`eq`, `and`, `isNull`) wrap
+ * symbols that don't survive JSON.stringify, so we don't try to match by
+ * id — we just assume each test exercises one row at a time and operate
+ * on whatever single row the table holds.
+ */
+function fakeDb() {
+  const rows: Map<string, any> = new Map();
+  let idCounter = 0;
+
+  const oneRow = () => [...rows.values()][0];
+
+  const db: any = {
+    insert(_table: any) {
+      return {
+        values(payload: any) {
+          return {
+            async returning() {
+              const id = `rec-${++idCounter}`;
+              const row = { id, consumedAt: null, ...payload };
+              rows.set(id, row);
+              return [row];
+            },
+          };
+        },
+      };
+    },
+    select(_columns?: any) {
+      return {
+        from(_table: any) {
+          return {
+            where(_condition: any) {
+              return {
+                async limit(_n: number) {
+                  const row = oneRow();
+                  return row ? [row] : [];
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+    update(_table: any) {
+      return {
+        set(patch: any) {
+          return {
+            where(_condition: any) {
+              return {
+                async returning() {
+                  const row = oneRow();
+                  if (!row) return [];
+                  // Honour the `consumed_at IS NULL` race guard.
+                  if (row.consumedAt) return [];
+                  Object.assign(row, patch);
+                  return [row];
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+    _rows: rows,
+  };
+
+  return db as DB & { _rows: Map<string, any> };
+}
+
 describe("StakeBondPipeline.prepare", () => {
-  it("returns the unsigned tx + a signed receipt that round-trips", async () => {
+  it("inserts a row, returns an opaque receipt id, never echoes the wallet back", async () => {
     const buildTransfer = vi.fn().mockResolvedValue({
       kind: "transfer",
       version: "v0",
@@ -39,233 +100,150 @@ describe("StakeBondPipeline.prepare", () => {
       requiredSigners: ["USERWALLET"],
       validator: "VALIDATOR",
     });
+    const db = fakeDb();
     const pipeline = new StakeBondPipeline({
       client: fakeClient(buildTransfer),
       connection: fakeConnection(),
+      db,
       stakePool: STAKE_POOL,
       mint: USDC,
-      minAmountRaw: 100_000n,
+      minAmountRaw: 50000n,
       cluster: "mainnet",
     });
-    const per = freshPerKeys();
 
-    const prepared = await pipeline.prepare({
-      postId: "post-1",
+    const result = await pipeline.prepare({
+      postId: "00000000-0000-0000-0000-000000000aaa",
       contentHash: sha256Hex("hello"),
-      fromWallet: "USERWALLET",
-      perSecretKey: per.secret,
+      fromWallet: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji",
+      perSecretKey: PER_SECRET,
     });
 
-    expect(prepared.unsignedTransactionBase64).toBe("BASE64TX");
-    expect(prepared.expectedAmountRaw).toBe("100000");
-    expect(prepared.expectedRecipient).toBe(STAKE_POOL.toBase58());
-    expect(prepared.memo).toBe("post-1");
+    expect(result.receiptId).toMatch(/^rec-/);
+    // The memo on-chain must be the HMAC, NOT the post id.
+    expect(result.memo).not.toBe(result.postId);
+    expect(result.memo).toMatch(/^[a-f0-9]{64}$/);
+    // Public response carries no wallet field.
+    expect(JSON.stringify(result)).not.toContain("3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji");
 
-    // The receipt verifies under the same PER pubkey.
-    const recovered = verifyReceipt(prepared.receipt, per.pubB58);
-    expect(recovered.postId).toBe("post-1");
-    expect(recovered.fromWallet).toBe("USERWALLET");
-
-    expect(buildTransfer).toHaveBeenCalledWith(
-      expect.objectContaining({
-        from: "USERWALLET",
-        to: STAKE_POOL.toBase58(),
-        mint: USDC.toBase58(),
-        amount: 100_000,
-        visibility: "private",
-        fromBalance: "base",
-        toBalance: "base",
-        memo: "post-1",
-      }),
-    );
+    // The DB row holds the wallet (server-side).
+    const row = [...db._rows.values()][0];
+    expect(row.fromWallet).toBe("3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji");
+    expect(row.memo).toBe(result.memo);
   });
 });
 
 describe("StakeBondPipeline.verifyOnChain", () => {
-  it("rejects an expired receipt", async () => {
-    const per = freshPerKeys();
-    const buildTransfer = vi.fn();
+  function setup(txMeta: any) {
+    const db = fakeDb();
     const pipeline = new StakeBondPipeline({
-      client: fakeClient(buildTransfer),
-      connection: fakeConnection(),
+      client: fakeClient(vi.fn().mockResolvedValue({
+        transactionBase64: "T",
+        recentBlockhash: "BH",
+        lastValidBlockHeight: 1,
+        requiredSigners: ["U"],
+        validator: "V",
+      })),
+      connection: fakeConnection(vi.fn().mockResolvedValue({ meta: txMeta })),
+      db,
       stakePool: STAKE_POOL,
       mint: USDC,
-      minAmountRaw: 100_000n,
+      minAmountRaw: 50000n,
       cluster: "mainnet",
     });
+    return { db, pipeline };
+  }
 
-    // Sign a receipt that's already expired by setting iat/exp in the past.
-    const fakeBuilt: any = {
-      transactionBase64: "X",
-      recentBlockhash: "B",
-      lastValidBlockHeight: 1,
-      instructionCount: 1,
-      requiredSigners: [],
-      validator: "V",
-    };
-    buildTransfer.mockResolvedValue({ kind: "transfer", version: "v0", sendTo: "base", ...fakeBuilt });
-    const prepared = await pipeline.prepare({
-      postId: "p-1",
-      contentHash: sha256Hex("x"),
-      fromWallet: "11111111111111111111111111111112",
-      perSecretKey: per.secret,
-    });
-
-    // Hack the receipt forward in time by replacing the payload's exp.
-    const parts = prepared.receipt.split(".");
-    const rawPayload = JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf8"));
-    rawPayload.exp = 1; // way in the past
-    rawPayload.iat = 1;
-    // The signature won't verify anymore, so we expect a generic invalid error.
-    const tampered = `${parts[0]}.${Buffer.from(JSON.stringify(rawPayload), "utf8").toString("base64url").replace(/=+$/, "")}.${parts[2]}`;
-
+  it("rejects an unknown receipt id", async () => {
+    const { pipeline } = setup({});
     await expect(
-      pipeline.verifyOnChain({
-        receipt: tampered,
-        perPubkeyBase58: per.pubB58,
-        txSignature: "fake",
-      }),
+      pipeline.verifyOnChain({ receiptId: "rec-9999", txSignature: "sig-1234567890123456789012345678901234" }),
     ).rejects.toBeInstanceOf(StakeBondError);
   });
 
-  it("rejects when the on-chain transaction is not found", async () => {
-    const per = freshPerKeys();
-    const conn = fakeConnection(vi.fn().mockResolvedValue(null));
-    const pipeline = new StakeBondPipeline({
-      client: fakeClient(vi.fn().mockResolvedValue({
-        kind: "transfer",
-        version: "v0",
-        transactionBase64: "X",
-        sendTo: "base",
-        recentBlockhash: "B",
-        lastValidBlockHeight: 1,
-        instructionCount: 1,
-        requiredSigners: [],
-        validator: "V",
-      })),
-      connection: conn,
-      stakePool: STAKE_POOL,
-      mint: USDC,
-      minAmountRaw: 100_000n,
-      cluster: "mainnet",
+  it("succeeds when sender debit and memo match, then refuses replay", async () => {
+    const { db, pipeline } = setup({});
+
+    const prep = await pipeline.prepare({
+      postId: "00000000-0000-0000-0000-000000000bbb",
+      contentHash: sha256Hex("body"),
+      fromWallet: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji",
+      perSecretKey: PER_SECRET,
     });
 
-    const prepared = await pipeline.prepare({
-      postId: "p-2",
-      contentHash: sha256Hex("y"),
-      fromWallet: "11111111111111111111111111111112",
-      perSecretKey: per.secret,
+    // Stub a tx whose memo matches and whose sender ATA debits ≥ expected.
+    pipeline["cfg"].connection.getParsedTransaction = vi.fn().mockResolvedValue({
+      meta: {
+        logMessages: [`Program log: Memo (len 64): "${prep.memo}"`],
+        preTokenBalances: [
+          { owner: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji", mint: USDC.toBase58(), uiTokenAmount: { amount: "100000" } },
+        ],
+        postTokenBalances: [
+          { owner: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji", mint: USDC.toBase58(), uiTokenAmount: { amount: "50000" } },
+        ],
+      },
+      transaction: { message: { instructions: [] } },
     });
 
+    const resolved = await pipeline.verifyOnChain({ receiptId: prep.receiptId, txSignature: "T" });
+    expect(resolved.fromWallet).toBe("3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji");
+
+    // Row marked consumed.
+    const row = db._rows.get(prep.receiptId)!;
+    expect(row.consumedAt).toBeInstanceOf(Date);
+
+    // Replay attempt — should fail.
     await expect(
-      pipeline.verifyOnChain({
-        receipt: prepared.receipt,
-        perPubkeyBase58: per.pubB58,
-        txSignature: "missing-tx",
-      }),
-    ).rejects.toThrow(/not found on chain/);
+      pipeline.verifyOnChain({ receiptId: prep.receiptId, txSignature: "T" }),
+    ).rejects.toThrow(/already consumed/);
   });
 
-  it("accepts when memo + amount are correct", async () => {
-    const per = freshPerKeys();
-
-    const conn = fakeConnection(
-      vi.fn().mockResolvedValue({
-        meta: {
-          err: null,
-          logMessages: ['Program log: Memo (len 36): "post-3"'],
-          preTokenBalances: [
-            { owner: "11111111111111111111111111111112", mint: USDC.toBase58(), uiTokenAmount: { amount: "100000" } },
-          ],
-          postTokenBalances: [
-            { owner: "11111111111111111111111111111112", mint: USDC.toBase58(), uiTokenAmount: { amount: "0" } },
-          ],
-        },
-        transaction: { message: { instructions: [] } },
-      }),
-    );
-
-    const pipeline = new StakeBondPipeline({
-      client: fakeClient(vi.fn().mockResolvedValue({
-        kind: "transfer",
-        version: "v0",
-        transactionBase64: "X",
-        sendTo: "base",
-        recentBlockhash: "B",
-        lastValidBlockHeight: 1,
-        instructionCount: 1,
-        requiredSigners: [],
-        validator: "V",
-      })),
-      connection: conn,
-      stakePool: STAKE_POOL,
-      mint: USDC,
-      minAmountRaw: 100_000n,
-      cluster: "mainnet",
+  it("rejects when sender debit is below the expected amount", async () => {
+    const { pipeline } = setup({});
+    const prep = await pipeline.prepare({
+      postId: "00000000-0000-0000-0000-000000000ccc",
+      contentHash: sha256Hex("body"),
+      fromWallet: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji",
+      perSecretKey: PER_SECRET,
     });
-
-    const prepared = await pipeline.prepare({
-      postId: "post-3",
-      contentHash: sha256Hex("z"),
-      fromWallet: "11111111111111111111111111111112",
-      perSecretKey: per.secret,
+    pipeline["cfg"].connection.getParsedTransaction = vi.fn().mockResolvedValue({
+      meta: {
+        logMessages: [`"${prep.memo}"`],
+        preTokenBalances: [
+          { owner: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji", mint: USDC.toBase58(), uiTokenAmount: { amount: "60000" } },
+        ],
+        postTokenBalances: [
+          { owner: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji", mint: USDC.toBase58(), uiTokenAmount: { amount: "59999" } },
+        ],
+      },
+      transaction: { message: { instructions: [] } },
     });
-
-    const verified = await pipeline.verifyOnChain({
-      receipt: prepared.receipt,
-      perPubkeyBase58: per.pubB58,
-      txSignature: "sig",
-    });
-
-    expect(verified.postId).toBe("post-3");
-    expect(verified.expectedAmountRaw).toBe("100000");
-  });
-
-  it("rejects when settled amount is below the minimum", async () => {
-    const per = freshPerKeys();
-    const conn = fakeConnection(
-      vi.fn().mockResolvedValue({
-        meta: {
-          err: null,
-          logMessages: ['Program log: Memo (len 36): "post-4"'],
-          preTokenBalances: [{ owner: "11111111111111111111111111111112", mint: USDC.toBase58(), uiTokenAmount: { amount: "1000" } }],
-          postTokenBalances: [{ owner: "11111111111111111111111111111112", mint: USDC.toBase58(), uiTokenAmount: { amount: "0" } }],
-        },
-        transaction: { message: { instructions: [] } },
-      }),
-    );
-    const pipeline = new StakeBondPipeline({
-      client: fakeClient(vi.fn().mockResolvedValue({
-        kind: "transfer",
-        version: "v0",
-        transactionBase64: "X",
-        sendTo: "base",
-        recentBlockhash: "B",
-        lastValidBlockHeight: 1,
-        instructionCount: 1,
-        requiredSigners: [],
-        validator: "V",
-      })),
-      connection: conn,
-      stakePool: STAKE_POOL,
-      mint: USDC,
-      minAmountRaw: 100_000n,
-      cluster: "mainnet",
-    });
-
-    const prepared = await pipeline.prepare({
-      postId: "post-4",
-      contentHash: sha256Hex("z"),
-      fromWallet: "11111111111111111111111111111112",
-      perSecretKey: per.secret,
-    });
-
     await expect(
-      pipeline.verifyOnChain({
-        receipt: prepared.receipt,
-        perPubkeyBase58: per.pubB58,
-        txSignature: "sig",
-      }),
+      pipeline.verifyOnChain({ receiptId: prep.receiptId, txSignature: "T" }),
     ).rejects.toThrow(/stake debit too low/);
+  });
+
+  it("rejects when the on-chain memo does not match", async () => {
+    const { pipeline } = setup({});
+    const prep = await pipeline.prepare({
+      postId: "00000000-0000-0000-0000-000000000ddd",
+      contentHash: sha256Hex("body"),
+      fromWallet: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji",
+      perSecretKey: PER_SECRET,
+    });
+    pipeline["cfg"].connection.getParsedTransaction = vi.fn().mockResolvedValue({
+      meta: {
+        logMessages: [`Program log: Memo (len 64): "deadbeef"`],
+        preTokenBalances: [
+          { owner: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji", mint: USDC.toBase58(), uiTokenAmount: { amount: "100000" } },
+        ],
+        postTokenBalances: [
+          { owner: "3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji", mint: USDC.toBase58(), uiTokenAmount: { amount: "50000" } },
+        ],
+      },
+      transaction: { message: { instructions: [] } },
+    });
+    await expect(
+      pipeline.verifyOnChain({ receiptId: prep.receiptId, txSignature: "T" }),
+    ).rejects.toThrow(/memo does not match/);
   });
 });

@@ -27,11 +27,32 @@ const prepareBody = z.object({
 });
 
 const finalizeBody = z.object({
-  receipt: z.string().min(16),
+  // Opaque uuid issued by /prepare. Wallet address never round-trips
+  // through the user any more — it lives in `prepared_stake_bonds`.
+  receiptId: z.string().uuid(),
   txSignature: z.string().min(32).max(128),
   title: z.string().min(1).max(160),
   content: z.string().max(2000).default(""),
 });
+
+/** Public projection of `posts` — strips `stake_tx_signature`-shaped
+ *  fields that could leak the wallet via on-chain RPC lookup. */
+const publicPostColumns = {
+  id: schema.posts.id,
+  authorAnonId: schema.posts.authorAnonId,
+  badgeKind: schema.posts.badgeKind,
+  title: schema.posts.title,
+  content: schema.posts.content,
+  contentHash: schema.posts.contentHash,
+  perAttestation: schema.posts.perAttestation,
+  stakeLamports: schema.posts.stakeLamports,
+  upCount: schema.posts.upCount,
+  downCount: schema.posts.downCount,
+  commentCount: schema.posts.commentCount,
+  createdAt: schema.posts.createdAt,
+  updatedAt: schema.posts.updatedAt,
+  deletedAt: schema.posts.deletedAt,
+} as const;
 
 /** Canonical hashable form: `${title}\n${body}`. Title alone is fine. */
 function canonicalText(title: string, content: string): string {
@@ -76,12 +97,16 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
 
       const rows = badge
         ? await deps.db
-            .select()
+            .select(publicPostColumns)
             .from(schema.posts)
             .where(eq(schema.posts.badgeKind, badge))
             .orderBy(desc(schema.posts.createdAt))
             .limit(limit)
-        : await deps.db.select().from(schema.posts).orderBy(desc(schema.posts.createdAt)).limit(limit);
+        : await deps.db
+            .select(publicPostColumns)
+            .from(schema.posts)
+            .orderBy(desc(schema.posts.createdAt))
+            .limit(limit);
 
       res.json({ posts: rows });
     } catch (err) {
@@ -92,7 +117,11 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
   router.get("/:id", async (req, res, next) => {
     try {
       const id = req.params.id;
-      const [post] = await deps.db.select().from(schema.posts).where(eq(schema.posts.id, id)).limit(1);
+      const [post] = await deps.db
+        .select(publicPostColumns)
+        .from(schema.posts)
+        .where(eq(schema.posts.id, id))
+        .limit(1);
       if (!post) {
         res.status(404).json({ error: "post_not_found" });
         return;
@@ -178,8 +207,7 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
       let receiptPayload;
       try {
         receiptPayload = await deps.stakeBond.verifyOnChain({
-          receipt: parsed.data.receipt,
-          perPubkeyBase58: deps.perPubkeyBase58,
+          receiptId: parsed.data.receiptId,
           txSignature: parsed.data.txSignature,
         });
       } catch (err) {
@@ -223,23 +251,26 @@ export function postsRouter(deps: PostsRouterDeps): ExpressRouter {
           contentHash: receiptPayload.contentHash,
           perAttestation: attestation.signature,
           stakeLamports: BigInt(receiptPayload.expectedAmountRaw),
-          stakeTxSignature: parsed.data.txSignature,
         })
         .returning();
       if (!inserted) throw new Error("failed to insert post");
 
+      // Audit log records the SHA256 of the tx signature, never the raw
+      // signature itself — preserves "did this post pay?" forensic answer
+      // without giving anyone holding the audit row a chain pointer to
+      // the wallet that signed.
       await deps.db.insert(schema.auditEvents).values({
         kind: "post_created",
         subjectId: inserted.id,
         actorAnonId: authorAnonId,
         badgeKind: session.token.kind,
         meta: JSON.stringify({
-          stakeTxSignature: parsed.data.txSignature,
+          stakeTxSignatureHash: sha256Hex(parsed.data.txSignature),
           stakeLamports: receiptPayload.expectedAmountRaw,
         }),
       });
 
-      res.status(201).json({ post: inserted, stakeTxSignature: parsed.data.txSignature });
+      res.status(201).json({ post: inserted });
     } catch (err) {
       next(err);
     }

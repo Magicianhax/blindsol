@@ -125,6 +125,7 @@ function initStakeBondPipeline() {
   return new StakeBondPipeline({
     client,
     connection: mainnetConnection,
+    db,
     stakePool: new PublicKey(stakePool),
     mint: usdcMint,
     minAmountRaw,

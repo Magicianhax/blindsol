@@ -166,7 +166,7 @@ export function PostComposer({
       );
       setStage("finalizing");
       await api.finalizePost(badge.badgeToken, {
-        receipt: prepared.stakeBond.receipt,
+        receiptId: prepared.stakeBond.receiptId,
         txSignature: signature,
         title: trimmedTitle,
         content: trimmedBody,
