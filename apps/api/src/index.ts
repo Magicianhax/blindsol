@@ -105,14 +105,19 @@ function initOnChainRegistry() {
   const programId = process.env.BADGE_PROGRAM_ID;
   if (!programId) return undefined;
 
-  const keypairPath = process.env.BADGE_AUTHORITY_KEYPAIR;
-  if (!keypairPath) {
+  const raw = process.env.BADGE_AUTHORITY_KEYPAIR;
+  if (!raw) {
     console.warn("[api] BADGE_PROGRAM_ID set but BADGE_AUTHORITY_KEYPAIR missing — on-chain mint disabled");
     return undefined;
   }
 
+  // Accept either an inline JSON array (the contents of a Solana keypair
+  // file — easy to drop into a Fly secret) or a filesystem path. Inline is
+  // detected by the leading "[". Path is the local-dev shape.
   try {
-    const secret = JSON.parse(fsMod.readFileSync(keypairPath, "utf8")) as number[];
+    const trimmed = raw.trim();
+    const json = trimmed.startsWith("[") ? trimmed : fsMod.readFileSync(trimmed, "utf8");
+    const secret = JSON.parse(json) as number[];
     const authority = Keypair.fromSecretKey(Uint8Array.from(secret));
     return new OnChainBadgeRegistry({
       connection: badgeConnection,
@@ -120,7 +125,7 @@ function initOnChainRegistry() {
       authority,
     });
   } catch (err) {
-    console.warn(`[api] failed to load BADGE_AUTHORITY_KEYPAIR (${keypairPath}): ${(err as Error).message}`);
+    console.warn(`[api] failed to load BADGE_AUTHORITY_KEYPAIR: ${(err as Error).message}`);
     return undefined;
   }
 }

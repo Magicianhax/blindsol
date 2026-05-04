@@ -168,14 +168,20 @@ export class OnChainBadgeRegistry {
 
     const data = Buffer.concat([DISC_DELEGATE_BADGE, kindBytes, indexLe]);
 
+    // Account order matches the layout the #[delegate] proc-macro produces:
+    // for each original field with `del`, the auto-generated buffer /
+    // delegation_record / delegation_metadata fields are inserted IMMEDIATELY
+    // BEFORE the original field. Final order:
+    //   authority, buffer_badge, delegation_record, delegation_metadata,
+    //   badge, owner_program, delegation_program, system_program
     const ix = new TransactionInstruction({
       programId: this.cfg.programId,
       keys: [
         { pubkey: this.cfg.authority.publicKey, isSigner: true, isWritable: true },
-        { pubkey: badge, isSigner: false, isWritable: true },
         { pubkey: bufferBadge, isSigner: false, isWritable: true },
         { pubkey: delegationRecordBadge, isSigner: false, isWritable: true },
         { pubkey: delegationMetadataBadge, isSigner: false, isWritable: true },
+        { pubkey: badge, isSigner: false, isWritable: true },
         { pubkey: this.cfg.programId, isSigner: false, isWritable: false },
         { pubkey: DELEGATION_PROGRAM_ID, isSigner: false, isWritable: false },
         { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
