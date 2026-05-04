@@ -53,38 +53,58 @@ export default function AboutPage() {
         <Section title="how it works" tape>
           <ol className="space-y-4">
             <ListStep n="1" label="connect wallet">
-              Phantom or any wallet-adapter compatible wallet. Read-only at this point — we just
+              Phantom, Solflare, Backpack, or Jupiter Wallet. Read-only at this point — we just
               need a pubkey to send a challenge to.
             </ListStep>
             <ListStep n="2" label="sign a challenge to claim a badge">
               Pick a community whose token you hold. Sign a one-time message proving you control
-              that wallet. The signature plus the wallet address goes to MagicBlock&apos;s TEE.
+              that wallet. The signature goes to MagicBlock&apos;s TEE.
             </ListStep>
             <ListStep n="3" label="TEE verifies you hold, issues an anon handle">
               Inside the trusted enclave, the server checks the on-chain balance, derives an
-              anonymous handle from a secret + your wallet + the badge kind, and signs a session
-              token. The wallet ↔ handle link <em>never leaves the enclave.</em>
+              anonymous handle as <span className="font-mono">HMAC(perSecret, wallet || kind)</span>,
+              mints an on-chain Badge account, and signs a session token. The wallet ↔ handle link{" "}
+              <em>never leaves the enclave.</em>
             </ListStep>
-            <ListStep n="4" label="post — verified, anonymous, settled">
-              Your post appears under your token badge and an anonymous handle. Readers know
+            <ListStep n="4" label="badge state delegated to MagicBlock PER">
+              Immediately after mint, the Badge account&apos;s ownership on Solana is handed over
+              to MagicBlock&apos;s Delegation program. Future lifecycle changes (revoke, slash,
+              expire) run privately at sub-50ms inside the rollup&apos;s TEE — Solana never sees the
+              intermediate state.
+            </ListStep>
+            <ListStep n="5" label="post — verified, anonymous, settled">
+              Your post appears under your token badge and the anonymous handle. Readers know
               you hold the bag — they just don&apos;t know who you are.
+            </ListStep>
+            <ListStep n="6" label="sign in from any device, no account needed">
+              The handle derivation is deterministic, so the same wallet on any browser /
+              phone reconstructs the same identity. Signing a fresh challenge restores all your
+              badges — no localStorage, no email, no password. The server still re-checks
+              on-chain holdings, so if you sold the bag your posting rights end.
             </ListStep>
           </ol>
         </Section>
 
         {/* MagicBlock's role */}
         <Section title="what MagicBlock does for us" tape={false}>
-          <p>
-            MagicBlock&apos;s rollup is the privacy engine. Two pieces matter:
-          </p>
+          <p>MagicBlock&apos;s rollup is the privacy engine. Three pieces matter:</p>
           <ul className="mt-3 space-y-3">
-            <BulletItem label="1) Private Ephemeral Rollup (PER)">
+            <BulletItem label="1) Private Ephemeral Rollup (PER) for identity derivation">
               A TEE-backed rollup where state is encrypted and computation is attested. We use it
-              to (a) verify token holdings off-chain, (b) derive your anonymous identity, and (c)
-              sign session tokens & per-action attestations. The encrypted-state property means
-              even an operator with full server access can&apos;t map wallets to handles.
+              to (a) verify token holdings off-chain, (b) derive your anonymous identity from the
+              wallet, and (c) sign session tokens & per-action attestations. The encrypted-state
+              property means even an operator with full server access can&apos;t map wallets to
+              handles.
             </BulletItem>
-            <BulletItem label="2) Attestation primitives">
+            <BulletItem label="2) State delegation for badge lifecycle">
+              When a Badge account is created on Solana, we immediately delegate it to the rollup.
+              Solana itself updates the badge&apos;s on-chain owner field to MagicBlock&apos;s
+              Delegation program — anyone can verify it on Solana Explorer. From that moment all
+              future mutations to that badge run inside the PER&apos;s encrypted TEE state, at
+              sub-50ms latency. Revoke, slash, expire — none of those will ever appear as public
+              transactions on the L1 ledger.
+            </BulletItem>
+            <BulletItem label="3) Attestation primitives">
               Every action you take (post, comment, vote) gets an ed25519 signature from the PER
               key. We store that signature with the row so any future reader can prove
               cryptographically that the action came from a verified badge — even after the
@@ -143,7 +163,10 @@ anonId   = base32(anonSeed)[:12]`}
             <BulletPoint>
               <strong className="font-display text-lg">Anchor badge registry (devnet today):</strong>{" "}
               an on-chain registry of badge mints, so anyone can audit how many badges have been
-              issued. The registry stores the pubkey of the anon-handle, never the issuer wallet.
+              issued. Each row stores <code className="font-mono text-sm">(kind, sha256(anonSeed),
+              index, ts)</code> — never the issuer wallet. After mint, ownership of the Badge
+              account is handed to MagicBlock&apos;s Delegation program; further mutations happen
+              inside the rollup.
             </BulletPoint>
           </ul>
         </Section>
