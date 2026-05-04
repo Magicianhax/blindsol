@@ -19,6 +19,7 @@ if (process.env.DATABASE_URL_TEST) {
 
 const { createApp } = await import("../../src/app.js");
 const { getDb, closeDb, schema } = await import("../../src/db/index.js");
+const { StubEvidenceVerifier } = await import("../../src/per/evidence.js");
 
 const haveDb = !!process.env.DATABASE_URL_TEST;
 const describeIfDb = haveDb ? describe : describe.skip;
@@ -29,7 +30,12 @@ const db = haveDb ? getDb() : (null as never);
 // Dummy PER credentials — these tests only exercise read paths.
 const dummySecret = haveDb ? new Uint8Array(64) : (null as never);
 const app = haveDb
-  ? createApp({ db, perPubkeyBase58: "1".repeat(32), perSecretKey: dummySecret })
+  ? createApp({
+      db,
+      perPubkeyBase58: "1".repeat(32),
+      perSecretKey: dummySecret,
+      evidence: new StubEvidenceVerifier({ ok: true }),
+    })
   : (null as never);
 
 afterAll(async () => {

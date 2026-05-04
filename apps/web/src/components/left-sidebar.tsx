@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { TokenIcon } from "./token-icon";
+import { HoloSeal } from "./holo-seal";
 import { useBadge } from "./badge-context";
-import { KINDS_BY_CATEGORY, tokenFor, type TokenMeta } from "@/lib/tokens";
+import { TOKENS, TOKEN_KINDS, tokenFor, type TokenMeta } from "@/lib/tokens";
 
 export type SortKind = "new" | "top";
 
@@ -12,22 +14,23 @@ interface LeftSidebarProps {
   sort: SortKind;
   onSort: (s: SortKind) => void;
   postCount: number;
-  /**
-   * Optional callback fired after the user clicks any nav item. The home
-   * page passes this in when the sidebar is rendered inside the mobile
-   * drawer — we use it to auto-close the drawer after a selection.
-   */
+  /** Auto-close drawer on mobile after a click. */
   onItemSelected?: () => void;
-  /** Wrapper variant — `desktop` is the sticky rail, `drawer` is mobile slide-in. */
+  /** Wrapper variant — `desktop` is the sticky rail, `drawer` is the slide-in. */
   variant?: "desktop" | "drawer";
+  /** Optional setter to claim a new badge — opens the claim dialog. */
+  onClaim?: () => void;
 }
 
-const CATEGORIES: Array<{ key: TokenMeta["category"]; label: string; emoji: string }> = [
-  { key: "DeFi", label: "DeFi", emoji: "🏦" },
-  { key: "Memes", label: "Memes", emoji: "🐸" },
-  { key: "Infra", label: "Infra", emoji: "🛠" },
-];
-
+/**
+ * Left rail for the desktop layout. Three panels matching the design spec:
+ *   1. Feeds — home / trending / new
+ *   2. Your Tokens — badges the user holds, with HoloSeal + active marker
+ *   3. All Tokens — every supported token with a fake-but-plausible price
+ *      and 24h change. Click filters the feed to that token.
+ *
+ * On mobile the same component is rendered inside the slide-in drawer.
+ */
 export function LeftSidebar({
   active,
   onSelect,
@@ -36,9 +39,9 @@ export function LeftSidebar({
   postCount,
   onItemSelected,
   variant = "desktop",
+  onClaim,
 }: LeftSidebarProps) {
-  const { badges } = useBadge();
-  const ownedKinds = new Set(badges.map((b) => b.kind));
+  const { badges, active: activeBadge } = useBadge();
 
   const handleSelect = (kind: string | undefined) => {
     onSelect(kind);
@@ -49,119 +52,239 @@ export function LeftSidebar({
     onItemSelected?.();
   };
 
-  // The desktop variant uses the sticky rail (.app-sidebar.app-sidebar--desktop
-  // is hidden on mobile via CSS). The drawer variant is rendered inside a
-  // mobile drawer, so we drop the sticky/scroll wrapping.
   const Wrapper: React.FC<{ children: React.ReactNode }> =
     variant === "desktop"
       ? ({ children }) => <aside className="app-sidebar app-sidebar--desktop">{children}</aside>
-      : ({ children }) => <div>{children}</div>;
+      : ({ children }) => <div className="flex flex-col gap-4">{children}</div>;
 
   return (
     <Wrapper>
-      <Section title="Sort">
-        <div className="flex flex-col gap-1.5">
-          <SortRow active={sort === "new"} onClick={() => handleSort("new")} label="✨ New" />
-          <SortRow active={sort === "top"} onClick={() => handleSort("top")} label="🔥 Top" />
+      <Panel title="feeds">
+        <div className="flex flex-col">
+          <RailRow
+            label="home"
+            icon={<FeedIcon />}
+            active={active === undefined && sort === "new"}
+            onClick={() => {
+              handleSelect(undefined);
+              handleSort("new");
+            }}
+            count={postCount}
+          />
+          <RailRow
+            label="trending"
+            icon={<FlameIcon />}
+            active={sort === "top"}
+            onClick={() => handleSort("top")}
+          />
+          <RailRow
+            label="new"
+            icon={<SparkIcon />}
+            active={sort === "new" && active === undefined}
+            onClick={() => {
+              handleSelect(undefined);
+              handleSort("new");
+            }}
+          />
         </div>
-      </Section>
+      </Panel>
 
-      <Section title="All threads">
-        <button
-          onClick={() => handleSelect(undefined)}
-          className={`flex w-full items-center justify-between rounded-lg border-2 px-3 py-1.5 text-left font-display text-xl transition ${
-            active === undefined
-              ? "border-ink bg-crayon-yellow shadow-pen-sm"
-              : "border-dashed border-border-soft hover:border-ink hover:bg-surface-2"
-          }`}
-        >
-          <span>everything</span>
-          <span className="font-mono text-xs text-muted">{postCount}</span>
-        </button>
-      </Section>
-
-      {CATEGORIES.map((cat) => (
-        <Section key={cat.key} title={`${cat.emoji} ${cat.label}`}>
-          <ul className="flex flex-col gap-1">
-            {KINDS_BY_CATEGORY[cat.key].map((k) => {
-              const meta = tokenFor(k)!;
-              const isActive = active === k;
-              const owned = ownedKinds.has(k);
+      <Panel
+        title="your tokens"
+        action={
+          onClaim ? (
+            <button
+              onClick={() => {
+                onClaim();
+                onItemSelected?.();
+              }}
+              className="font-mono text-[10px] uppercase tracking-[0.06em] text-acid transition hover:text-acid-d"
+            >
+              + claim
+            </button>
+          ) : null
+        }
+      >
+        {badges.length === 0 ? (
+          <div className="px-3 py-4 font-mono text-[11px] leading-relaxed text-muted">
+            no badges yet. claim one to start posting.
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {badges.map((b) => {
+              const meta = tokenFor(b.kind);
+              const isActive = activeBadge?.badgeId === b.badgeId;
+              const filterActive = active === b.kind;
               return (
-                <li key={k}>
-                  <button
-                    onClick={() => handleSelect(isActive ? undefined : k)}
-                    className={`group flex w-full items-center gap-2.5 rounded-lg border-2 px-2 py-1.5 text-left transition ${
-                      isActive
-                        ? "border-ink bg-crayon-yellow shadow-pen-sm"
-                        : "border-dashed border-transparent hover:border-ink hover:bg-surface-2"
-                    }`}
-                    title={owned ? `you hold a $${meta.symbol} badge` : undefined}
-                  >
-                    <TokenIcon kind={k} size={26} />
-                    <span className="flex-1 font-display text-lg leading-none">${meta.symbol}</span>
-                    {owned && (
-                      <span
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-crayon-green text-paper"
-                        aria-label="badge owned"
-                      >
-                        <CheckTick />
-                      </span>
-                    )}
-                  </button>
-                </li>
+                <button
+                  key={b.badgeId}
+                  onClick={() => handleSelect(filterActive ? undefined : b.kind)}
+                  className={`group flex items-center gap-2.5 px-3 py-2 text-left transition ${
+                    filterActive ? "bg-acid-soft" : "hover:bg-bg-3"
+                  }`}
+                >
+                  <HoloSeal hash={b.anonId ?? b.kind} size={22} animate={isActive} />
+                  <div className="flex min-w-0 flex-1 flex-col leading-tight">
+                    <span className="font-mono text-[12px] text-text">${meta?.symbol ?? b.kind}</span>
+                    <span className="truncate font-mono text-[9px] text-muted-2">
+                      {b.anonId ?? b.kind}
+                    </span>
+                  </div>
+                  {isActive && (
+                    <span className="rounded-sm border border-acid-line bg-acid-soft px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.1em] text-acid">
+                      active
+                    </span>
+                  )}
+                </button>
               );
             })}
-          </ul>
-        </Section>
-      ))}
+          </div>
+        )}
+      </Panel>
 
-      <div className="mt-8 border-t-2 border-dashed border-border-soft pt-4 text-[13px] text-muted">
-        <p className="font-display text-base text-ink">— a tiny note —</p>
-        <p className="mt-1 leading-snug">
-          you only see badges of bags people <em>actually</em> hold. wallet ↔ identity stays sealed in MagicBlock&apos;s rollup.
-        </p>
+      <Panel title="all tokens">
+        <div className="flex flex-col">
+          {TOKEN_KINDS.map((kind) => (
+            <TokenRow
+              key={kind}
+              kind={kind}
+              meta={TOKENS[kind]!}
+              active={active === kind}
+              onClick={() => handleSelect(active === kind ? undefined : kind)}
+            />
+          ))}
+        </div>
+      </Panel>
+
+      <div className="mt-2 px-3 py-3 font-mono text-[10px] leading-relaxed text-muted">
+        wallet ↔ identity stays sealed in magicblock&apos;s tee. you only see badges of tokens people <span className="text-text-2">actually</span> hold.
       </div>
     </Wrapper>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="mb-5">
-      <h3 className="mb-1.5 font-display text-base text-muted">{title}</h3>
+    <section className="mb-4 overflow-hidden rounded-md border border-line bg-bg-2">
+      <header className="flex items-center justify-between border-b border-line px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+        <span>{title}</span>
+        {action}
+      </header>
       {children}
     </section>
   );
 }
 
-function CheckTick() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
-      <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function SortRow({
+function RailRow({
+  label,
+  icon,
   active,
   onClick,
-  label,
+  count,
 }: {
+  label: string;
+  icon: React.ReactNode;
   active: boolean;
   onClick: () => void;
-  label: string;
+  count?: number;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-lg border-2 px-3 py-1 text-left font-display text-lg leading-tight transition ${
-        active
-          ? "border-ink bg-paper shadow-pen-sm"
-          : "border-dashed border-transparent hover:border-ink hover:bg-surface-2"
+      className={`flex items-center gap-2.5 px-3 py-2 text-left transition ${
+        active ? "bg-acid-soft text-acid" : "text-text-2 hover:bg-bg-3 hover:text-text"
       }`}
     >
-      {label}
+      <span className={active ? "text-acid" : "text-muted"}>{icon}</span>
+      <span className="flex-1 font-mono text-[12px] leading-none">{label}</span>
+      {typeof count === "number" && (
+        <span className="font-mono text-[10px] tabular-nums text-muted-2">{count}</span>
+      )}
     </button>
+  );
+}
+
+/**
+ * Single all-tokens row. Shows ticker + a deterministic placeholder price
+ * and 24h change derived from the symbol so the feed feels alive without
+ * a real price feed wired up.
+ */
+function TokenRow({
+  kind,
+  meta,
+  active,
+  onClick,
+}: {
+  kind: string;
+  meta: TokenMeta;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const placeholder = useMemo(() => placeholderQuote(meta.symbol), [meta.symbol]);
+
+  return (
+    <button
+      onClick={onClick}
+      className={`group flex items-center gap-2.5 px-3 py-1.5 text-left transition ${
+        active ? "bg-acid-soft" : "hover:bg-bg-3"
+      }`}
+    >
+      <TokenIcon kind={kind} size={18} />
+      <span
+        className={`flex-1 font-mono text-[11px] leading-none ${
+          active ? "text-acid" : "text-text-2"
+        }`}
+      >
+        ${meta.symbol}
+      </span>
+      <span
+        className={`font-mono text-[10px] tabular-nums ${
+          placeholder.change >= 0 ? "text-acid" : "text-danger"
+        }`}
+      >
+        {placeholder.change >= 0 ? "+" : ""}
+        {placeholder.change.toFixed(1)}%
+      </span>
+    </button>
+  );
+}
+
+function placeholderQuote(symbol: string) {
+  // Stable per-symbol pseudo-random so the rail doesn't reshuffle on render.
+  let h = 0;
+  for (let i = 0; i < symbol.length; i++) h = (h * 31 + symbol.charCodeAt(i)) >>> 0;
+  const change = ((h % 1000) / 100 - 5).toFixed(1); // -5.0 to +4.99
+  return { change: parseFloat(change) };
+}
+
+function FeedIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <line x1="3" y1="4" x2="13" y2="4" strokeLinecap="round" />
+      <line x1="3" y1="8" x2="13" y2="8" strokeLinecap="round" />
+      <line x1="3" y1="12" x2="9" y2="12" strokeLinecap="round" />
+    </svg>
+  );
+}
+function FlameIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 14 Q3 11 5 7 Q5 9 7 9 Q5 5 8 2 Q9 6 11 7 Q12 11 8 14 Z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function SparkIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 2 L9 7 L14 8 L9 9 L8 14 L7 9 L2 8 L7 7 Z" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

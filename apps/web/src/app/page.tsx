@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { TopNav } from "@/components/top-nav";
 import { LeftSidebar, type SortKind } from "@/components/left-sidebar";
 import { MobileDrawer } from "@/components/mobile-drawer";
+import { RightRail } from "@/components/right-rail";
 import { PostComposer } from "@/components/post-composer";
 import { ThreadRow } from "@/components/thread-row";
+import { ClaimDialog } from "@/components/claim-dialog";
 import { useBadge } from "@/components/badge-context";
 import { api, type Post } from "@/lib/api";
 import { tokenFor } from "@/lib/tokens";
@@ -18,11 +20,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
 
   // Sync the active badge with the community filter — if the user filters
   // to $BONK and they hold a $BONK badge, switch them onto it so their next
-  // post lands in the right place. We DO NOT switch off if they don't hold
-  // a matching badge; the composer renders a "claim $BONK" prompt instead.
+  // post lands in the right place.
   const { badges, active, setActive } = useBadge();
   useEffect(() => {
     if (!filter) return;
@@ -92,6 +94,10 @@ export default function HomePage() {
           onSort={setSort}
           postCount={posts.length}
           onItemSelected={() => setMenuOpen(false)}
+          onClaim={() => {
+            setMenuOpen(false);
+            setClaiming(true);
+          }}
         />
       </MobileDrawer>
 
@@ -102,41 +108,47 @@ export default function HomePage() {
           sort={sort}
           onSort={setSort}
           postCount={posts.length}
+          onClaim={() => setClaiming(true)}
         />
 
         <main className="app-main">
-          <div className="mb-4 flex flex-wrap items-end gap-x-3 gap-y-1 sm:mb-5">
-            <h1 className="font-display text-3xl leading-none text-ink sm:text-4xl md:text-5xl">
-              <span className="scribble-underline">
-                {filter ? `$${filterMeta?.symbol}` : sort === "top" ? "trending" : "the feed"}
-              </span>
+          <div className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="font-mono text-[20px] font-medium leading-tight tracking-tight text-text">
+              <span className="text-muted-2">~/</span>
+              {filter ? `t/${filterMeta?.symbol.toLowerCase()}` : sort === "top" ? "trending" : "feed"}
             </h1>
-            <span className="font-display text-base text-muted sm:text-lg">
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
               {filter
-                ? `threads from $${filterMeta?.symbol} holders`
+                ? `posts from $${filterMeta?.symbol} holders`
                 : sort === "top"
                 ? "ranked by ▲ minus ▼"
-                : "freshest first, like bread"}
+                : "posts from holders of every verified token"}
             </span>
           </div>
 
-          <div className="mb-5">
+          <div className="mb-4">
             <PostComposer requiredKind={filter} onPosted={refresh} />
           </div>
 
           {err && (
-            <div className="mb-4 rounded-lg border-2 border-crayon-red bg-crayon-red/10 p-3 text-sm text-crayon-red">
+            <div className="mb-4 rounded border border-danger/40 bg-danger/10 p-3 font-mono text-[12px] text-danger">
               oops — {err}
             </div>
           )}
 
-          <div className="scribble-card overflow-hidden">
+          <div className="overflow-hidden rounded-md border border-line bg-bg-2">
+            <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+                {visiblePosts.length} {visiblePosts.length === 1 ? "thread" : "threads"}
+              </span>
+              <SortPills sort={sort} onSort={setSort} />
+            </header>
             {loading ? (
               <ListSkeleton />
             ) : visiblePosts.length === 0 ? (
               <EmptyState filter={filter} hasSearch={!!search.trim()} />
             ) : (
-              <ul className="wobble-in">
+              <ul>
                 {visiblePosts.map((p) => (
                   <li key={p.id}>
                     <ThreadRow post={p} />
@@ -144,12 +156,44 @@ export default function HomePage() {
                 ))}
               </ul>
             )}
+            <footer className="border-t border-line px-4 py-3 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+              end of feed · <span className="text-acid">load older</span>
+            </footer>
           </div>
 
           <FooterNote />
         </main>
+
+        <RightRail />
       </div>
+
+      {claiming && <ClaimDialog onClose={() => setClaiming(false)} />}
     </>
+  );
+}
+
+function SortPills({ sort, onSort }: { sort: SortKind; onSort: (s: SortKind) => void }) {
+  const pills: Array<{ id: SortKind; label: string }> = [
+    { id: "top", label: "trending" },
+    { id: "new", label: "new" },
+  ];
+  return (
+    <div className="flex gap-0.5 rounded border border-line bg-bg-3 p-0.5">
+      {pills.map((p) => {
+        const active = sort === p.id;
+        return (
+          <button
+            key={p.id}
+            onClick={() => onSort(p.id)}
+            className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] transition ${
+              active ? "bg-bg-4 text-acid" : "text-text-2 hover:text-text"
+            }`}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -159,13 +203,13 @@ function ListSkeleton() {
       {[1, 2, 3, 4].map((i) => (
         <div key={i} className="thread-row">
           <div className="flex flex-col items-center gap-1 pt-0.5">
-            <div className="h-3 w-3 animate-pulse rounded bg-surface-3" />
-            <div className="h-3 w-6 animate-pulse rounded bg-surface-3" />
-            <div className="h-3 w-3 animate-pulse rounded bg-surface-3" />
+            <div className="h-3 w-3 animate-pulse rounded bg-bg-3" />
+            <div className="h-3 w-6 animate-pulse rounded bg-bg-3" />
+            <div className="h-3 w-3 animate-pulse rounded bg-bg-3" />
           </div>
           <div className="space-y-2">
-            <div className="h-5 w-3/4 animate-pulse rounded bg-surface-3" />
-            <div className="h-3 w-1/2 animate-pulse rounded bg-surface-3" />
+            <div className="h-4 w-3/4 animate-pulse rounded bg-bg-3" />
+            <div className="h-3 w-1/2 animate-pulse rounded bg-bg-3" />
           </div>
         </div>
       ))}
@@ -177,18 +221,18 @@ function EmptyState({ filter, hasSearch }: { filter: string | undefined; hasSear
   if (hasSearch) {
     return (
       <div className="px-6 py-16 text-center">
-        <h3 className="font-display text-3xl text-ink">no luck</h3>
-        <p className="mt-2 text-base text-text-2">nothing matched. try fewer words?</p>
+        <h3 className="font-mono text-[14px] text-text">no luck</h3>
+        <p className="mt-2 font-mono text-[12px] text-text-2">nothing matched. try fewer words?</p>
       </div>
     );
   }
   return (
     <div className="px-6 py-16 text-center">
-      <h3 className="font-display text-3xl text-ink">empty.</h3>
-      <p className="mt-2 text-base text-text-2">
+      <h3 className="font-mono text-[14px] text-text">empty.</h3>
+      <p className="mt-2 font-mono text-[12px] text-text-2">
         {filter
-          ? "be the first to post in this little corner."
-          : "no threads yet. claim a badge and start saying things."}
+          ? "be the first holder to post in this token's forum."
+          : "no threads yet. claim a badge and start the conversation."}
       </p>
     </div>
   );
@@ -196,15 +240,20 @@ function EmptyState({ filter, hasSearch }: { filter: string | undefined; hasSear
 
 function FooterNote() {
   return (
-    <footer className="mt-8 flex flex-wrap items-center gap-3 border-t-2 border-dashed border-border-soft pt-4 text-[13px] text-muted">
-      <a href="/about" className="font-display text-base text-ink hover:text-crayon-blue">
-        what is this? →
+    <footer className="mt-6 flex flex-wrap items-center gap-3 border-t border-line pt-4 font-mono text-[11px] text-muted">
+      <a href="/about" className="text-text-2 transition hover:text-acid">
+        how it works →
       </a>
       <span className="text-muted-2">·</span>
-      <a href="https://docs.magicblock.gg" target="_blank" rel="noreferrer" className="hover:text-ink">
-        MagicBlock docs ↗
+      <a
+        href="https://docs.magicblock.gg"
+        target="_blank"
+        rel="noreferrer"
+        className="text-text-2 transition hover:text-acid"
+      >
+        magicblock docs ↗
       </a>
-      <span className="ml-auto">v0.1 · mainnet beta</span>
+      <span className="ml-auto uppercase tracking-[0.1em] text-muted-2">v0.1 · mainnet beta</span>
     </footer>
   );
 }

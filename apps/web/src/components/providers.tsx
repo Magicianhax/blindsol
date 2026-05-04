@@ -2,6 +2,7 @@
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
+import { AutoRestoreSession } from "./auto-restore-session";
 import { BadgeProvider } from "./badge-context";
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? "";
@@ -12,15 +13,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   if (!PRIVY_APP_ID) {
     return (
       <div className="mx-auto max-w-2xl p-8 text-center">
-        <h1 className="font-display text-3xl text-crayon-red">missing privy app id</h1>
-        <p className="mt-2 text-base text-text-2">
-          Set <code className="font-mono">NEXT_PUBLIC_PRIVY_APP_ID</code> in your{" "}
-          <code className="font-mono">.env.local</code> (grab it from{" "}
+        <h1 className="font-mono text-[20px] font-medium text-danger">missing privy app id</h1>
+        <p className="mt-2 font-mono text-[13px] text-text-2">
+          Set <code className="font-mono text-text">NEXT_PUBLIC_PRIVY_APP_ID</code> in your{" "}
+          <code className="font-mono text-text">.env.local</code> (grab it from{" "}
           <a
             href="https://dashboard.privy.io"
             target="_blank"
             rel="noreferrer"
-            className="underline hover:text-ink"
+            className="underline transition hover:text-acid"
           >
             dashboard.privy.io
           </a>
@@ -44,17 +45,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
         // public key, which is also what the API verifies against.
         loginMethods: ["wallet"],
         appearance: {
-          // Cream-paper background to match the scribble theme; Privy
+          // Dark terminal palette — matches the BlindSol aesthetic. Privy
           // derives foreground colors from this hex automatically.
-          theme: "#fffaee",
-          // Crayon-yellow accent (matches the "Claim a badge" pill).
-          accentColor: "#facc15",
+          theme: "#0a0b08",
+          // Acid-green signal accent — the brand's only saturated color.
+          accentColor: "#c4ff3d",
           logo: "/blindSOL.png",
           walletChainType: "solana-only",
           showWalletLoginFirst: true,
           // Header copy + subtitle in BlindSol's voice.
-          landingHeader: "verified bags. anonymous voices.",
-          loginMessage: "connect a Solana wallet to claim your badge.",
+          landingHeader: "verified holders. sealed wallets.",
+          loginMessage: "connect a Solana wallet to claim an anonymous badge.",
           // Pin the three Solana wallets we explicitly want surfaced first.
           // `detected_solana_wallets` falls back to any other wallet the
           // user has installed; `wallet_connect` covers mobile via QR.
@@ -77,7 +78,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
       }}
     >
-      <BadgeProvider>{children}</BadgeProvider>
+      <BadgeProvider>
+        <AutoRestoreSession />
+        {children}
+      </BadgeProvider>
     </PrivyProvider>
   );
 }

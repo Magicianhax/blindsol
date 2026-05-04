@@ -64,6 +64,7 @@ const stakeBond = initStakeBondPipeline();
 const app = createApp({
   db,
   badgeIssuer,
+  evidence,
   perPubkeyBase58: perKeys.publicKeyBase58,
   perSecretKey: perKeys.secretKey,
   ...(stakeBond ? { stakeBond } : {}),

@@ -14,7 +14,7 @@ export function ConnectButton() {
 
   if (!ready) {
     return (
-      <button disabled className="scribble-btn opacity-60">
+      <button disabled className="scribble-btn h-8 opacity-60">
         <span className="font-mono text-sm">…</span>
       </button>
     );
@@ -22,8 +22,8 @@ export function ConnectButton() {
 
   if (!authenticated || !wallet) {
     return (
-      <button onClick={login} className="scribble-btn scribble-btn--primary">
-        Connect
+      <button onClick={login} className="scribble-btn scribble-btn--primary h-8">
+        connect
       </button>
     );
   }
@@ -35,11 +35,11 @@ export function ConnectButton() {
     <button
       type="button"
       onClick={logout}
-      className="scribble-btn"
+      className="scribble-btn h-8 whitespace-nowrap"
       title="Click to disconnect"
     >
-      <span className="h-2 w-2 rounded-full bg-crayon-green" />
-      <span className="font-mono text-sm">{short}</span>
+      <span className="h-2 w-2 shrink-0 rounded-full bg-acid" />
+      <span className="hidden font-mono text-[11px] sm:inline">{short}</span>
     </button>
   );
 }

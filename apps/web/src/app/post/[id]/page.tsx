@@ -5,6 +5,7 @@ import Link from "next/link";
 import { TopNav } from "@/components/top-nav";
 import { CommentThread } from "@/components/comment-thread";
 import { TokenIcon } from "@/components/token-icon";
+import { HoloSeal, VerifiedDot } from "@/components/holo-seal";
 import { useBadge } from "@/components/badge-context";
 import { tokenFor } from "@/lib/tokens";
 import { api, type Comment, type Post, type Reaction } from "@/lib/api";
@@ -73,20 +74,22 @@ export default function PostPage({ params }: PageProps) {
       <main className="mx-auto max-w-3xl px-4 py-6">
         <Link
           href="/"
-          className="scribble-btn scribble-btn--ghost mb-4 inline-flex"
+          className="scribble-btn scribble-btn--ghost mb-5 inline-flex"
         >
           <BackIcon />
-          back to threads
+          back to feed
         </Link>
 
         {err && (
-          <div className="mb-3 rounded-lg border-2 border-crayon-red bg-crayon-red/10 p-3 text-sm text-crayon-red">
+          <div className="mb-4 rounded border border-danger/40 bg-danger/10 p-3 font-mono text-[12px] text-danger">
             oops — {err}
           </div>
         )}
 
         {loading && !post && (
-          <div className="scribble-card p-8 text-center font-display text-2xl text-muted">loading…</div>
+          <div className="scribble-card p-10 text-center font-mono text-[13px] text-muted">
+            loading…
+          </div>
         )}
 
         {post && <ThreadDetail post={post} upCount={upCount} downCount={downCount} onVoted={refresh} />}
@@ -114,7 +117,7 @@ function ThreadDetail({
 }) {
   const { badge } = useBadge();
   const meta = tokenFor(post.badgeKind);
-  const symbol = meta ? `$${meta.symbol}` : post.badgeKind;
+  const symbol = meta ? meta.symbol : post.badgeKind;
   const { title, body } = titleAndBody(post);
   const score = upCount - downCount;
   const [busy, setBusy] = useState(false);
@@ -138,55 +141,80 @@ function ThreadDetail({
   }
 
   return (
-    <article className="scribble-card p-5">
-      <header className="flex items-center gap-2 text-[13px] text-muted">
-        <TokenIcon kind={post.badgeKind} size={26} />
-        <span className="font-display text-lg text-ink">{symbol}</span>
+    <article className="scribble-card p-6">
+      <header className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
+        <Link
+          href={`/?filter=${post.badgeKind}`}
+          className="font-mono text-[11px] text-text-2 transition hover:text-acid"
+        >
+          ← /t/{symbol.toLowerCase()}
+        </Link>
         <span className="text-muted-2">·</span>
+        <span className="scribble-chip" style={{ padding: "3px 8px 3px 5px" }}>
+          <TokenIcon kind={post.badgeKind} size={14} />
+          <span>${symbol}</span>
+        </span>
+        <span className="text-muted-2">·</span>
+        <HoloSeal hash={post.authorAnonId} size={20} />
         <Link
           href={`/u/${post.authorAnonId}`}
-          className="rounded px-1 transition hover:bg-surface-2 hover:text-ink"
+          className="rounded px-0.5 transition hover:text-acid"
         >
           {post.displayName ? (
-            <span className="font-display text-base text-ink">@{post.displayName}</span>
+            <span className="font-mono text-[12px] text-text">@{post.displayName}</span>
           ) : (
-            <span className="font-mono text-[12px]">{post.authorAnonId}</span>
+            <span className="font-mono text-[11px] text-text-2">{post.authorAnonId}</span>
           )}
         </Link>
+        <VerifiedDot />
         <span className="text-muted-2">·</span>
         <span>{timeAgo(post.createdAt)}</span>
       </header>
 
       {title && (
-        <h1 className="mt-3 break-words font-display text-2xl leading-tight text-ink sm:text-3xl md:text-4xl">{title}</h1>
+        <h1 className="mb-3 break-words font-mono text-[22px] font-medium leading-snug tracking-tight text-text sm:text-[26px]">
+          {title}
+        </h1>
       )}
       {body && (
-        <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink sm:text-[16px]">{body}</p>
+        <p className="whitespace-pre-wrap break-words font-mono text-[14px] leading-relaxed text-text-2">
+          {body}
+        </p>
       )}
-      {!title && !body && <p className="mt-3 text-base text-muted">(empty post)</p>}
+      {!title && !body && (
+        <p className="font-mono text-[13px] text-muted">(empty post)</p>
+      )}
 
-      <footer className="mt-5 flex flex-wrap items-center gap-2 border-t-2 border-dashed border-border-soft pt-3">
+      <footer className="mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-4">
         <button
           onClick={() => vote("up")}
           disabled={busy || !badge}
-          className={`scribble-chip ${score > 0 ? "scribble-chip--active" : ""} disabled:opacity-50`}
+          className={`scribble-chip ${score > 0 ? "scribble-chip--active" : ""} disabled:opacity-40`}
+          title={badge ? "Upvote" : "Claim a badge to vote"}
         >
           ▲ <span className="font-mono">{upCount}</span>
         </button>
         <button
           onClick={() => vote("down")}
           disabled={busy || !badge}
-          className={`scribble-chip ${score < 0 ? "scribble-chip--active" : ""} disabled:opacity-50`}
+          className={`scribble-chip ${score < 0 ? "scribble-chip--active" : ""} disabled:opacity-40`}
+          title={badge ? "Downvote" : "Claim a badge to vote"}
         >
           ▼ <span className="font-mono">{downCount}</span>
         </button>
-        <span className="ml-2 font-display text-lg">
+        <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.1em] text-muted">
           score{" "}
-          <span className={score > 0 ? "text-crayon-green" : score < 0 ? "text-crayon-red" : "text-muted"}>
+          <span
+            className={`font-mono ${
+              score > 0 ? "text-acid" : score < 0 ? "text-danger" : "text-text-2"
+            }`}
+          >
             {score > 0 ? `+${score}` : score}
           </span>
         </span>
-        {voteErr && <span className="ml-auto text-[13px] text-crayon-red">{voteErr}</span>}
+        {voteErr && (
+          <span className="ml-auto font-mono text-[11px] text-danger">{voteErr}</span>
+        )}
       </footer>
     </article>
   );
@@ -194,7 +222,7 @@ function ThreadDetail({
 
 function BackIcon() {
   return (
-    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6">
       <path d="M13 8H3M7 4L3 8l4 4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

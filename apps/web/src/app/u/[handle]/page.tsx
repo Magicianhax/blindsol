@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useState } from "react";
 import { TopNav } from "@/components/top-nav";
 import { ThreadRow } from "@/components/thread-row";
 import { TokenIcon } from "@/components/token-icon";
+import { HoloSeal, VerifiedDot } from "@/components/holo-seal";
 import { tokenFor } from "@/lib/tokens";
 import { api, ApiError, type Comment, type Post, type UserProfile } from "@/lib/api";
 
@@ -36,8 +37,6 @@ export default function ProfilePage({ params }: PageProps) {
     setLoading(true);
     setErr(null);
     try {
-      // Resolve handle → anon. If the URL already starts with `anon_`,
-      // use it directly; otherwise look up the username.
       const resolved = handle.startsWith("anon_")
         ? { anonId: handle, username: null as string | null }
         : await api.resolveHandle(handle);
@@ -70,7 +69,7 @@ export default function ProfilePage({ params }: PageProps) {
     <>
       <TopNav />
       <main className="mx-auto max-w-3xl px-4 py-6">
-        <Link href="/" className="scribble-btn scribble-btn--ghost mb-4 inline-flex">
+        <Link href="/" className="scribble-btn scribble-btn--ghost mb-5 inline-flex">
           <BackIcon />
           back
         </Link>
@@ -78,21 +77,29 @@ export default function ProfilePage({ params }: PageProps) {
         {err === "not_found" ? (
           <NotFound handle={handle} />
         ) : err ? (
-          <div className="rounded-lg border-2 border-crayon-red bg-crayon-red/10 p-3 text-sm text-crayon-red">
+          <div className="rounded border border-danger/40 bg-danger/10 p-3 font-mono text-[12px] text-danger">
             oops — {err}
           </div>
         ) : loading || !profile ? (
-          <div className="scribble-card p-6 text-center font-display text-2xl text-muted">loading…</div>
+          <div className="scribble-card p-10 text-center font-mono text-[13px] text-muted">
+            loading…
+          </div>
         ) : (
           <>
             <ProfileHeader profile={profile} anonId={anonId ?? handle} />
 
-            <div className="my-5 flex gap-2 border-b-2 border-dashed border-border-soft">
-              <TabButton active={tab === "posts"} onClick={() => setTab("posts")} label={`posts (${posts.length})`} />
+            <div className="my-5 flex gap-2 border-b border-line">
+              <TabButton
+                active={tab === "posts"}
+                onClick={() => setTab("posts")}
+                label="posts"
+                count={posts.length}
+              />
               <TabButton
                 active={tab === "comments"}
                 onClick={() => setTab("comments")}
-                label={`comments (${comments.length})`}
+                label="comments"
+                count={comments.length}
               />
             </div>
 
@@ -109,30 +116,29 @@ function ProfileHeader({ profile, anonId }: { profile: UserProfile; anonId: stri
   const symbol = meta?.symbol ?? profile.badgeKind ?? "anon";
 
   return (
-    <div className="scribble-card flex flex-wrap items-center gap-4 px-5 py-4">
-      {profile.badgeKind ? (
-        <TokenIcon kind={profile.badgeKind} size={56} />
-      ) : (
-        <div className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-dashed border-border-soft text-2xl text-muted">
-          ?
-        </div>
-      )}
+    <div className="scribble-card flex flex-wrap items-center gap-5 p-6">
+      <HoloSeal hash={anonId} size={64} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
-          <h1 className="font-display text-3xl leading-tight text-ink">
+          <h1 className="font-mono text-[24px] font-medium leading-tight tracking-tight text-text">
             {profile.username ? `@${profile.username}` : (
-              <span className="font-mono text-xl">{anonId}</span>
+              <span className="font-mono text-[16px] text-text-2">{anonId}</span>
             )}
           </h1>
           {profile.badgeKind ? (
-            <span className="rounded-full border-2 border-ink bg-crayon-yellow px-2 py-0.5 font-display text-sm">
-              ${symbol}
+            <span className="scribble-chip" style={{ padding: "3px 8px 3px 5px" }}>
+              <TokenIcon kind={profile.badgeKind} size={14} />
+              <span>${symbol}</span>
             </span>
           ) : null}
+          <VerifiedDot />
         </div>
-        <p className="mt-1 font-mono text-[12px] text-muted">{anonId}</p>
-        <p className="mt-2 text-[13px] text-text-2">
-          {profile.postCount} posts · {profile.commentCount} comments
+        {profile.username && (
+          <p className="mt-1.5 break-all font-mono text-[11px] text-muted">{anonId}</p>
+        )}
+        <p className="mt-2 font-mono text-[12px] text-text-2">
+          <span className="text-text">{profile.postCount}</span> posts ·{" "}
+          <span className="text-text">{profile.commentCount}</span> comments
           {profile.firstSeen ? ` · joined ${timeAgo(profile.firstSeen)}` : ""}
         </p>
       </div>
@@ -140,15 +146,28 @@ function ProfileHeader({ profile, anonId }: { profile: UserProfile; anonId: stri
   );
 }
 
-function TabButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function TabButton({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`-mb-0.5 rounded-t-md border-b-4 px-4 py-2 font-display text-lg transition ${
-        active ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink"
+      className={`-mb-px rounded-t px-4 py-2.5 font-mono text-[12px] uppercase tracking-[0.06em] transition ${
+        active
+          ? "border-b-2 border-acid text-acid"
+          : "border-b-2 border-transparent text-muted hover:text-text"
       }`}
     >
-      {label}
+      {label}{" "}
+      <span className="font-mono text-[11px] text-muted-2">{count}</span>
     </button>
   );
 }
@@ -156,7 +175,7 @@ function TabButton({ active, onClick, label }: { active: boolean; onClick: () =>
 function PostsList({ posts }: { posts: Post[] }) {
   if (posts.length === 0) {
     return (
-      <div className="scribble-card-flat p-6 text-center text-base text-muted">
+      <div className="scribble-card-flat p-10 text-center font-mono text-[13px] text-muted">
         no threads yet.
       </div>
     );
@@ -177,7 +196,7 @@ function PostsList({ posts }: { posts: Post[] }) {
 function CommentsList({ comments }: { comments: Comment[] }) {
   if (comments.length === 0) {
     return (
-      <div className="scribble-card-flat p-6 text-center text-base text-muted">
+      <div className="scribble-card-flat p-10 text-center font-mono text-[13px] text-muted">
         no comments yet.
       </div>
     );
@@ -191,16 +210,18 @@ function CommentsList({ comments }: { comments: Comment[] }) {
           <li key={c.id}>
             <Link
               href={`/post/${c.postId}`}
-              className="scribble-card-flat block px-4 py-3 transition hover:bg-bg-2"
+              className="scribble-card-flat block px-4 py-3 transition hover:border-line-2"
             >
-              <header className="flex items-center gap-2 text-[12px] text-muted">
-                <TokenIcon kind={c.badgeKind} size={16} />
-                <span className="font-display text-sm text-ink">${symbol}</span>
+              <header className="flex items-center gap-2 font-mono text-[11px] text-muted">
+                <TokenIcon kind={c.badgeKind} size={14} />
+                <span className="text-text">${symbol}</span>
                 <span className="text-muted-2">·</span>
                 <span>{timeAgo(c.createdAt)}</span>
-                <span className="ml-auto text-[11px] text-muted">in thread →</span>
+                <span className="ml-auto text-[10px] uppercase tracking-[0.06em] text-acid">
+                  in thread →
+                </span>
               </header>
-              <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-[14px] leading-snug text-ink">
+              <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-text">
                 {c.content}
               </p>
             </Link>
@@ -213,10 +234,10 @@ function CommentsList({ comments }: { comments: Comment[] }) {
 
 function NotFound({ handle }: { handle: string }) {
   return (
-    <div className="scribble-card p-8 text-center">
-      <h1 className="font-display text-3xl text-ink">no such handle</h1>
-      <p className="mt-2 text-base text-text-2">
-        couldn&apos;t resolve <span className="font-mono">{handle}</span>. Check the spelling, or it
+    <div className="scribble-card p-10 text-center">
+      <h1 className="font-mono text-[20px] font-medium text-text">no such handle</h1>
+      <p className="mt-2 font-mono text-[13px] text-text-2">
+        couldn&apos;t resolve <span className="text-text">{handle}</span>. check the spelling, or it
         may have been released.
       </p>
     </div>
@@ -225,7 +246,7 @@ function NotFound({ handle }: { handle: string }) {
 
 function BackIcon() {
   return (
-    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6">
       <path d="M13 8H3M7 4L3 8l4 4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

@@ -1,7 +1,9 @@
 import express, { type Express } from "express";
 import { type DB } from "./db/index.js";
+import type { EvidenceVerifier } from "./per/evidence.js";
 import type { BadgeIssuer } from "./per/issuer.js";
 import type { StakeBondPipeline } from "./posts/stake-bond.js";
+import { authRouter } from "./routes/auth.js";
 import { badgesRouter } from "./routes/badges.js";
 import { postsRouter } from "./routes/posts.js";
 import { rpcRouter } from "./routes/rpc.js";
@@ -20,6 +22,8 @@ export interface AppDeps {
   badgeIssuer?: BadgeIssuer;
   perPubkeyBase58: string;
   perSecretKey: Uint8Array;
+  /** Required for /auth/sign-in to re-check on-chain holdings before reissuing tokens. */
+  evidence: EvidenceVerifier;
   stakeBond?: StakeBondPipeline;
   rpcUrls?: { mainnet: string; badge: string };
   /** Mainnet RPC URL the /rpc proxy forwards to. */
@@ -60,6 +64,15 @@ export function createApp(deps: AppDeps): Express {
   if (deps.badgeIssuer) {
     app.use("/badges", badgesRouter({ issuer: deps.badgeIssuer, db: deps.db }));
   }
+
+  // Sign-in (cross-device session restore). Always enabled so devices that
+  // already have a badge can recover even if badgeIssuer claim flow is off.
+  // Evidence is required: every restored badge is re-checked on-chain so a
+  // wallet that sold its bag can no longer post as a verified holder.
+  app.use(
+    "/auth",
+    authRouter({ db: deps.db, perSecretKey: deps.perSecretKey, evidence: deps.evidence }),
+  );
 
   app.use(
     "/posts",

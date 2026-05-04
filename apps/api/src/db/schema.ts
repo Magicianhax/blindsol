@@ -4,15 +4,54 @@ import { relations, sql } from "drizzle-orm";
 /**
  * Badges issued by the TEE after verifying token holdings.
  * Notice: NO wallet column. The wallet ↔ badge link only exists inside PER.
+ *
+ * `anon_id` is the deterministic per-(wallet,kind) anon identity derived
+ * inside the TEE via HMAC. Storing it on the badge row lets sign-in look
+ * up "all badges this wallet ever claimed" without ever persisting the
+ * wallet itself: the server computes the candidate anon_ids and queries
+ * `WHERE anon_id IN (...)`. UNIQUE so the same wallet+kind cannot mint
+ * twice.
  */
-export const badges = pgTable("badges", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  kind: text("kind").notNull(),
-  onChainPubkey: text("on_chain_pubkey").notNull(),
-  /** Anchor program signature for the on-chain mint_badge call. */
-  mintTxSignature: text("mint_tx_signature"),
-  issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const badges = pgTable(
+  "badges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").notNull(),
+    onChainPubkey: text("on_chain_pubkey").notNull(),
+    /** Anchor program signature for the on-chain mint_badge call. */
+    mintTxSignature: text("mint_tx_signature"),
+    /** Deterministic anon. Nullable for legacy rows minted under random seeds. */
+    anonId: text("anon_id"),
+    issuedAt: timestamp("issued_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_badges_anon").on(t.anonId).where(sql`${t.anonId} IS NOT NULL`),
+  ],
+);
+
+/**
+ * Single-use sign-in challenges. The server issues a fresh nonce, the user's
+ * wallet signs it, and the server verifies the signature plus marks the
+ * row consumed in one transaction.
+ *
+ * No wallet column — the challenge is wallet-agnostic until redeemed, and
+ * even then we only learn the wallet long enough to derive the anon_id
+ * inside the TEE.
+ */
+export const authChallenges = pgTable(
+  "auth_challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nonce: text("nonce").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_auth_challenges_nonce").on(t.nonce),
+    index("idx_auth_challenges_expires").on(t.expiresAt),
+  ],
+);
 
 export const reactionKind = pgEnum("reaction_kind", ["up", "down", "spam"]);
 
@@ -277,3 +316,5 @@ export type PreparedStakeBondRow = typeof preparedStakeBonds.$inferSelect;
 export type NewPreparedStakeBondRow = typeof preparedStakeBonds.$inferInsert;
 export type Username = typeof usernames.$inferSelect;
 export type NewUsername = typeof usernames.$inferInsert;
+export type AuthChallenge = typeof authChallenges.$inferSelect;
+export type NewAuthChallenge = typeof authChallenges.$inferInsert;

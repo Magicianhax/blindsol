@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { DB } from "../db/index.js";
 import { schema } from "../db/index.js";
+import { deriveAnonSeedFromWallet, deriveAuthorAnonId } from "./anon.js";
 import { BADGE_LABELS, type BadgeKind, type EvidenceVerifier } from "./evidence.js";
-import { newAnonSeed, signBadgeToken, walletFingerprint } from "./token.js";
+import { signBadgeToken, walletFingerprint } from "./token.js";
 import { verifyWalletSignature } from "./verifier.js";
 
 /**
@@ -43,6 +44,8 @@ export interface ClaimResult {
   onChainPubkey: string;
   badgeToken: string;
   expiresAt: number;
+  /** Deterministic anon id derived inside the TEE. Public, stable per (wallet, kind). */
+  anonId: string;
 }
 
 const DEFAULT_TTL_SECONDS = 60 * 60 * 24; // 24h
@@ -73,28 +76,49 @@ export class BadgeIssuer {
       throw new BadgeIssuanceError(`evidence check failed: ${evidence.reason ?? "unknown reason"}`);
     }
 
-    const onChainPubkey = await this.mint(req);
+    // Deterministic anon derivation: same wallet + same kind always produces
+    // the same anon_id. The wallet pubkey enters the HMAC inside the TEE here
+    // and is immediately discarded — it never reaches a row in the DB.
+    const anonSeed = deriveAnonSeedFromWallet(this.deps.perSecretKey, req.walletBase58, req.kind);
+    const anonId = deriveAuthorAnonId(anonSeed, req.kind);
 
-    const [inserted] = await this.deps.db
-      .insert(schema.badges)
-      .values({ kind: req.kind, onChainPubkey })
-      .returning({ id: schema.badges.id });
-    if (!inserted) throw new BadgeIssuanceError("failed to record badge in DB");
+    // If a badge already exists for this anon_id we reuse the row instead of
+    // creating a duplicate. This is what makes "log in on a new device, claim,
+    // and find all your old posts already there" work.
+    const existing = await this.deps.db
+      .select({ id: schema.badges.id, onChainPubkey: schema.badges.onChainPubkey })
+      .from(schema.badges)
+      .where(eq(schema.badges.anonId, anonId))
+      .limit(1);
 
-    await this.deps.db.insert(schema.auditEvents).values({
-      kind: "badge_issued",
-      subjectId: inserted.id,
-      actorAnonId: null,
-      badgeKind: req.kind,
-      meta: JSON.stringify({ onChainPubkey }),
-    });
+    let badgeId: string;
+    let onChainPubkey: string;
+    if (existing[0]) {
+      badgeId = existing[0].id;
+      onChainPubkey = existing[0].onChainPubkey;
+    } else {
+      onChainPubkey = await this.mint(req);
+      const [inserted] = await this.deps.db
+        .insert(schema.badges)
+        .values({ kind: req.kind, onChainPubkey, anonId })
+        .returning({ id: schema.badges.id });
+      if (!inserted) throw new BadgeIssuanceError("failed to record badge in DB");
+      badgeId = inserted.id;
+
+      await this.deps.db.insert(schema.auditEvents).values({
+        kind: "badge_issued",
+        subjectId: badgeId,
+        actorAnonId: null,
+        badgeKind: req.kind,
+        meta: JSON.stringify({ onChainPubkey }),
+      });
+    }
 
     const now = (this.deps.now ?? (() => Math.floor(Date.now() / 1000)))();
     const exp = now + (this.deps.tokenTtlSeconds ?? DEFAULT_TTL_SECONDS);
-    const anonSeed = newAnonSeed();
     const badgeToken = signBadgeToken(
       {
-        badgeId: inserted.id,
+        badgeId,
         kind: req.kind,
         anonSeed,
         walletFingerprint: walletFingerprint(req.walletBase58),
@@ -104,14 +128,8 @@ export class BadgeIssuer {
       this.deps.perSecretKey,
     );
 
-    // Derive the anon id server-side and ship it in the response so the
-    // client doesn't have to recompute the HMAC. Already-public info (it
-    // appears on every post the badge authors), so no new leak surface.
-    const { deriveAuthorAnonId } = await import("./anon.js");
-    const anonId = deriveAuthorAnonId(anonSeed, req.kind);
-
     return {
-      badgeId: inserted.id,
+      badgeId,
       kind: req.kind,
       label: BADGE_LABELS[req.kind],
       onChainPubkey,

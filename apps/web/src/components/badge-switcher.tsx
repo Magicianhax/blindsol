@@ -47,15 +47,15 @@ export function BadgeSwitcher({ onClaimMore }: BadgeSwitcherProps) {
     <div ref={wrapRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="scribble-chip"
+        className="scribble-chip h-8"
         aria-haspopup="menu"
         aria-expanded={open}
         title="switch badge"
       >
-        <TokenIcon kind={active.kind} size={22} />
+        <TokenIcon kind={active.kind} size={18} />
         <span>${activeSymbol}</span>
         {badges.length > 1 && (
-          <span className="ml-0.5 rounded-full bg-ink px-1.5 py-0.5 font-mono text-[10px] leading-none text-paper">
+          <span className="ml-0.5 rounded-full bg-acid px-1.5 py-0.5 font-mono text-[10px] leading-none text-bg">
             {badges.length}
           </span>
         )}

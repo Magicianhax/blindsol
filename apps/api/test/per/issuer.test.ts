@@ -39,6 +39,7 @@ function makeIssuerEnv() {
   const app = createApp({
     db,
     badgeIssuer: issuer,
+    evidence: new StubEvidenceVerifier({ ok: true }),
     perPubkeyBase58: perPubB58,
     perSecretKey: perKp.secretKey,
   });
@@ -114,6 +115,7 @@ describeIfDb("POST /badges/claim", () => {
     const failingApp = createApp({
       db: env.db,
       badgeIssuer: failingIssuer,
+      evidence: new StubEvidenceVerifier({ ok: false, reason: "not enough JUP" }),
       perPubkeyBase58: env.perPubB58,
       perSecretKey: env.perKp.secretKey,
     });

@@ -65,11 +65,7 @@ export default function AboutPage() {
               anonymous handle from a secret + your wallet + the badge kind, and signs a session
               token. The wallet ↔ handle link <em>never leaves the enclave.</em>
             </ListStep>
-            <ListStep n="4" label="post a thread, pay $0.05 USDC privately">
-              When you post, your wallet pays a $0.05 platform fee through MagicBlock&apos;s Private
-              Payments rails. The chain sees a deposit happened; nobody sees which post it paid for.
-            </ListStep>
-            <ListStep n="5" label="verified. anonymous. on-chain settled.">
+            <ListStep n="4" label="post — verified, anonymous, settled">
               Your post appears under your token badge and an anonymous handle. Readers know
               you hold the bag — they just don&apos;t know who you are.
             </ListStep>
@@ -79,7 +75,7 @@ export default function AboutPage() {
         {/* MagicBlock's role */}
         <Section title="what MagicBlock does for us" tape={false}>
           <p>
-            MagicBlock&apos;s rollup is the privacy engine. Three pieces matter:
+            MagicBlock&apos;s rollup is the privacy engine. Two pieces matter:
           </p>
           <ul className="mt-3 space-y-3">
             <BulletItem label="1) Private Ephemeral Rollup (PER)">
@@ -88,14 +84,7 @@ export default function AboutPage() {
               sign session tokens & per-action attestations. The encrypted-state property means
               even an operator with full server access can&apos;t map wallets to handles.
             </BulletItem>
-            <BulletItem label="2) Private Payments API">
-              An HTTPS endpoint that builds <em>private</em> SPL transfers — your USDC moves
-              from your base-layer ATA into the PER vault, attributed to the recipient inside
-              the rollup. The on-chain record shows your wallet sending USDC, but{" "}
-              <em>not which recipient pubkey received it.</em> That&apos;s how a $0.05 fee per post
-              doesn&apos;t become a public ledger of &ldquo;wallet X commented on thread Y.&rdquo;
-            </BulletItem>
-            <BulletItem label="3) Attestation primitives">
+            <BulletItem label="2) Attestation primitives">
               Every action you take (post, comment, vote) gets an ed25519 signature from the PER
               key. We store that signature with the row so any future reader can prove
               cryptographically that the action came from a verified badge — even after the
@@ -152,11 +141,6 @@ anonId   = base32(anonSeed)[:12]`}
               can&apos;t read it directly — it can only request attestations.
             </BulletPoint>
             <BulletPoint>
-              <strong className="font-display text-lg">Solana mainnet:</strong> the $0.05 USDC
-              payments (debited from your wallet, settled into the PER vault). The on-chain
-              record shows you paid; it doesn&apos;t show what you paid for.
-            </BulletPoint>
-            <BulletPoint>
               <strong className="font-display text-lg">Anchor badge registry (devnet today):</strong>{" "}
               an on-chain registry of badge mints, so anyone can audit how many badges have been
               issued. The registry stores the pubkey of the anon-handle, never the issuer wallet.
@@ -197,7 +181,7 @@ anonId   = base32(anonSeed)[:12]`}
             <StackCard label="Frontend" items={["Next.js 15 (App Router)", "Tailwind CSS", "Solana Wallet Adapter", "Patrick Hand + Caveat fonts"]} />
             <StackCard label="Backend" items={["Express", "Drizzle ORM", "Neon Postgres", "ed25519 attestations"]} />
             <StackCard label="Privacy" items={["MagicBlock Private Ephemeral Rollup", "MagicBlock Private Payments", "TEE-attested badge issuance", "HMAC-derived anon IDs"]} />
-            <StackCard label="On-chain" items={["Solana mainnet (USDC fees)", "Anchor badge_registry program", "Helius RPC", "Phantom wallet"]} />
+            <StackCard label="On-chain" items={["Solana mainnet", "Anchor badge_registry program", "Helius RPC", "Phantom wallet"]} />
           </div>
         </Section>
 

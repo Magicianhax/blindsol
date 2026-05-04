@@ -3,66 +3,134 @@
 @tailwind utilities;
 
 :root {
-  /* Hand-drawn / notebook aesthetic — cream paper, ink black */
-  --bg: #fffaee;
-  --bg-2: #fff6e0;
-  --paper: #ffffff;
-  --surface: #fffdf5;
-  --surface-2: #fef4dd;
-  --surface-3: #fde9bf;
+  /* Dark terminal aesthetic — acid green accent on near-black */
+  --bg: #0a0b08;
+  --bg-2: #111310;
+  --bg-3: #181a15;
+  --bg-4: #20231d;
 
-  --ink: #1a1818;
-  --ink-soft: rgba(26, 24, 24, 0.7);
-  --ink-faded: rgba(26, 24, 24, 0.45);
+  /* Aliases used heavily in legacy class names. Keep them mapped to the
+     dark surfaces so existing className references render correctly without
+     touching every file. */
+  --paper: #0a0b08;
+  --surface: #111310;
+  --surface-2: #181a15;
+  --surface-3: #20231d;
 
-  --border: #1a1818;
-  --border-soft: rgba(26, 24, 24, 0.35);
+  --line: #2a2d25;
+  --line-2: #383c33;
 
-  --text: #1a1818;
-  --text-2: #3f3a35;
-  --muted: #6b6359;
-  --muted-2: #9a9089;
+  /* "ink" used to be black; on dark bg it's the light foreground */
+  --ink: #e8e8e0;
+  --ink-soft: rgba(232, 232, 224, 0.72);
+  --ink-faded: rgba(232, 232, 224, 0.45);
 
-  --crayon-blue: #2563eb;
-  --crayon-red: #dc2626;
-  --crayon-green: #16a34a;
-  --crayon-yellow: #facc15;
-  --crayon-purple: #9333ea;
-  --crayon-pink: #ec4899;
-  --crayon-orange: #f97316;
-  --highlighter: #fde68a;
+  --border: #2a2d25;
+  --border-soft: rgba(232, 232, 224, 0.18);
 
-  --accent: var(--crayon-blue);
-  --accent-2: #1d4ed8;
-  --accent-soft: #dbeafe;
+  --text: #e8e8e0;
+  --text-2: #b8b9ad;
+  --muted: #7a7d70;
+  --muted-2: #5a5d52;
+  --fg-3: #5a5d52;
 
-  --success: var(--crayon-green);
-  --danger: var(--crayon-red);
-  --warning: var(--crayon-orange);
+  /* Acid-green signal — the only saturated color in the palette */
+  --acid: #c4ff3d;
+  --acid-d: #a4dd1d;
+  --acid-soft: rgba(196, 255, 61, 0.12);
+  --acid-line: rgba(196, 255, 61, 0.32);
 
-  /* Pen-on-paper hard offset shadow (no blur) */
-  --pen-shadow: 4px 4px 0 var(--ink);
-  --pen-shadow-sm: 2px 2px 0 var(--ink);
-  --pen-shadow-lg: 6px 6px 0 var(--ink);
+  /* Status */
+  --warn: #ffb13d;
+  --danger: #ff5a4d;
 
-  --header-h: 76px;
-  --header-h-sm: 60px;
-  --sidebar-w: 220px;
+  /* Legacy palette aliases — remap to the new system so components that
+     still reference these tokens read naturally on dark. */
+  --crayon-blue: var(--acid);
+  --crayon-red: var(--danger);
+  --crayon-green: var(--acid);
+  --crayon-yellow: var(--acid);
+  --crayon-purple: var(--acid);
+  --crayon-pink: var(--acid);
+  --crayon-orange: var(--warn);
+  --highlighter: var(--acid-soft);
+
+  --accent: var(--acid);
+  --accent-2: var(--acid-d);
+  --accent-soft: var(--acid-soft);
+
+  --success: var(--acid);
+  --warning: var(--warn);
+
+  /* No more pen shadow on dark — kept as no-ops so components don't lose
+     spacing when the value is referenced in a box-shadow shorthand. */
+  --pen-shadow: 0 0 0 transparent;
+  --pen-shadow-sm: 0 0 0 transparent;
+  --pen-shadow-lg: 0 0 0 transparent;
+
+  --header-h: 60px;
+  --header-h-sm: 56px;
+  --sidebar-w: 240px;
+
+  /* Theme-aware translucent surface — used by sticky header + bottom tab
+     bar so they blur the content below in their own theme's color, not
+     a hardcoded dark. Light theme overrides this below. */
+  --surface-translucent: rgba(10, 11, 8, 0.85);
+  --tab-bar-translucent: rgba(17, 19, 16, 0.92);
+}
+
+/* ─── light theme override (paper / zine) ─── */
+:root[data-theme="light"] {
+  --bg: #f4f1ea;
+  --bg-2: #ece8de;
+  --bg-3: #e3dfd2;
+  --bg-4: #d8d3c4;
+  --paper: #f4f1ea;
+  --surface: #ece8de;
+  --surface-2: #e3dfd2;
+  --surface-3: #d8d3c4;
+
+  --line: #d4cfbe;
+  --line-2: #b8b29e;
+
+  --ink: #1a1a14;
+  --ink-soft: rgba(26, 26, 20, 0.72);
+  --ink-faded: rgba(26, 26, 20, 0.45);
+
+  --border: #d4cfbe;
+  --border-soft: rgba(26, 26, 20, 0.18);
+
+  --text: #1a1a14;
+  --text-2: #3a3a30;
+  --muted: #6a6a5a;
+  --muted-2: #8a8a78;
+  --fg-3: #8a8a78;
+
+  /* darker acid for legibility on cream */
+  --acid: #4a7a10;
+  --acid-d: #3a6510;
+  --acid-soft: rgba(74, 122, 16, 0.12);
+  --acid-line: rgba(74, 122, 16, 0.35);
+
+  --warn: #b8650a;
+  --danger: #c5392c;
+
+  --surface-translucent: rgba(244, 241, 234, 0.85);
+  --tab-bar-translucent: rgba(236, 232, 222, 0.94);
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Notebook-paper background with subtle ruled lines */
 html,
 body {
   background-color: var(--bg);
-  background-image:
-    linear-gradient(to right, transparent 39px, rgba(220, 50, 50, 0.06) 39px, rgba(220, 50, 50, 0.06) 40px, transparent 40px),
-    repeating-linear-gradient(to bottom, transparent 0, transparent 27px, rgba(37, 99, 235, 0.05) 27px, rgba(37, 99, 235, 0.05) 28px);
-  color: var(--ink);
-  font-family: var(--font-body), "Comic Sans MS", "Patrick Hand", system-ui, sans-serif;
+  color: var(--text);
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -70,26 +138,26 @@ body {
 body {
   position: relative;
   min-height: 100dvh;
-  font-size: 17px;
-  line-height: 1.55;
 }
 
 ::selection {
-  background: var(--highlighter);
-  color: var(--ink);
+  background: var(--acid);
+  color: var(--bg);
 }
 
 ::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--ink);
-  border-radius: 9999px;
-  border: 3px solid var(--bg);
+  background: var(--line-2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
 button {
@@ -103,124 +171,154 @@ button:disabled {
 input,
 textarea {
   font-family: inherit;
+  color: var(--text);
 }
 
-/* Fonts */
+/* Type tokens — all monospace by default, with a sans-fallback class */
 .font-display {
-  font-family: var(--font-display), "Caveat", "Comic Sans MS", cursive;
-  font-weight: 700;
-  letter-spacing: 0.005em;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 .font-body {
-  font-family: var(--font-body), "Patrick Hand", "Comic Sans MS", system-ui, sans-serif;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
 }
 .font-mono {
-  font-family: var(--font-mono), "Menlo", "Monaco", monospace;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
 }
 .font-scribble {
-  font-family: var(--font-display), "Caveat", cursive;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+}
+.font-sans-grotesk {
+  font-family: var(--font-sans), "Space Grotesk", -apple-system, system-ui, sans-serif;
 }
 
-/* Hand-drawn cards & buttons — wonky borders, hard pen-offset shadow */
+/* ─── cards ─── */
 .scribble-card {
-  background: var(--paper);
-  border: 2.5px solid var(--ink);
-  border-radius: 14px 6px 18px 8px;
-  box-shadow: var(--pen-shadow);
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+  transition: border-color 120ms ease;
+}
+.scribble-card:hover {
+  border-color: var(--line-2);
 }
 
 .scribble-card-flat {
-  background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 12px 8px 16px 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
 }
 
+/* ─── buttons ─── */
 .scribble-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: var(--paper);
-  color: var(--ink);
-  border: 2.5px solid var(--ink);
-  border-radius: 999px 14px 999px 14px;
-  padding: 6px 14px;
-  font-family: var(--font-display), "Caveat", cursive;
-  font-weight: 700;
-  font-size: 16px;
-  box-shadow: var(--pen-shadow-sm);
-  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+  gap: 8px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  padding: 7px 14px;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  box-shadow: none;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
 .scribble-btn:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 var(--ink);
+  border-color: var(--acid);
+  color: var(--acid);
 }
 .scribble-btn:active:not(:disabled) {
-  transform: translate(1px, 1px);
-  box-shadow: 0 0 0 var(--ink);
+  background: var(--bg-3);
 }
 .scribble-btn:disabled {
-  opacity: 0.45;
-  box-shadow: 1px 1px 0 var(--ink);
+  opacity: 0.4;
 }
 
 .scribble-btn--primary {
-  background: var(--crayon-blue);
-  color: white;
+  background: var(--acid);
+  color: var(--bg);
+  border-color: var(--acid);
+  font-weight: 600;
 }
 .scribble-btn--primary:hover:not(:disabled) {
-  background: var(--accent-2);
+  background: var(--acid-d);
+  border-color: var(--acid-d);
+  color: var(--bg);
 }
-
 .scribble-btn--yellow {
-  background: var(--crayon-yellow);
-  color: var(--ink);
+  background: var(--acid);
+  color: var(--bg);
+  border-color: var(--acid);
+  font-weight: 600;
+}
+.scribble-btn--yellow:hover:not(:disabled) {
+  background: var(--acid-d);
+  border-color: var(--acid-d);
+  color: var(--bg);
 }
 .scribble-btn--red {
-  background: var(--crayon-red);
-  color: white;
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.scribble-btn--red:hover:not(:disabled) {
+  background: var(--danger);
+  color: var(--bg);
+  border-color: var(--danger);
 }
 .scribble-btn--ghost {
   background: transparent;
+  border: 1px solid transparent;
   box-shadow: none;
-  border: 2px dashed var(--border-soft);
 }
 .scribble-btn--ghost:hover:not(:disabled) {
-  border-color: var(--ink);
-  background: var(--surface-2);
+  border-color: var(--line-2);
+  background: transparent;
+  color: var(--text);
 }
 
-/* Pill chip — same vibe as button but lighter */
+/* ─── chips ─── */
 .scribble-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--paper);
-  border: 2px solid var(--ink);
-  border-radius: 999px 12px 999px 12px;
-  padding: 3px 10px 3px 4px;
-  font-family: var(--font-display), "Caveat", cursive;
-  font-weight: 600;
-  font-size: 15px;
-  box-shadow: var(--pen-shadow-sm);
-  transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+  box-shadow: none;
   white-space: nowrap;
+  transition: border-color 120ms ease, color 120ms ease;
 }
 .scribble-chip:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 var(--ink);
+  border-color: var(--line-2);
+  color: var(--text);
 }
 .scribble-chip--active {
-  background: var(--crayon-yellow);
+  background: var(--acid-soft);
+  border-color: var(--acid-line);
+  color: var(--acid);
 }
 
-/* Highlighter span (yellow background swipe behind text) */
+/* ─── highlighter (acid-soft swipe behind text) ─── */
 .highlighter {
-  background-image: linear-gradient(180deg, transparent 50%, var(--highlighter) 50%);
-  padding: 0 0.15em;
+  background-image: linear-gradient(180deg, transparent 50%, var(--acid-soft) 50%);
+  padding: 0 0.18em;
+  color: var(--acid);
 }
 
-/* Hand-drawn-ish underline, wavy */
+/* ─── scribble-underline → thin acid underline ─── */
 .scribble-underline {
   position: relative;
   display: inline-block;
@@ -228,54 +326,88 @@ textarea {
 .scribble-underline::after {
   content: "";
   position: absolute;
-  left: -2%;
-  right: -2%;
-  bottom: -4px;
-  height: 6px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 6'><path d='M0,3 Q5,0 10,3 T20,3 T30,3 T40,3 T50,3 T60,3 T70,3 T80,3 T90,3 T100,3' fill='none' stroke='%231a1818' stroke-width='1.5' stroke-linecap='round'/></svg>");
-  background-repeat: repeat-x;
-  background-size: 60px 6px;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1px;
+  background: var(--acid);
   pointer-events: none;
 }
 
-/* Layout grid */
+/* ─── layout grid (desktop: left rail / main / right rail) ─── */
 .app-layout {
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  max-width: 1180px;
+  max-width: 1280px;
   margin: 0 auto;
+  gap: 22px;
+  padding: 22px 22px 60px;
+  align-items: flex-start;
+}
+@media (min-width: 1024px) {
+  /* 3-column grid kicks in once we have room for the right rail */
+  .app-layout {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 280px;
+    max-width: 1480px;
+  }
 }
 .app-sidebar {
-  border-right: 2px dashed var(--border-soft);
-  padding: 24px 16px 24px 16px;
   position: sticky;
-  top: var(--header-h);
+  top: calc(var(--header-h) + 16px);
   align-self: start;
-  height: calc(100dvh - var(--header-h));
+  max-height: calc(100dvh - var(--header-h) - 32px);
   overflow-y: auto;
+  padding: 0;
 }
 .app-main {
-  padding: 24px 24px 64px;
   min-width: 0;
+  padding: 0;
 }
 @media (max-width: 767px) {
   .app-layout {
     grid-template-columns: 1fr;
+    gap: 0;
+    padding: 0;
   }
   .app-sidebar.app-sidebar--desktop {
     display: none;
   }
   .app-main {
-    padding: 14px 14px 48px;
+    padding: 16px 14px 96px;
   }
 }
 
-/* Mobile drawer (sidebar slides in from the left on tap of hamburger) */
+/* ─── mobile bottom tab bar ─── */
+.mobile-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  background: var(--tab-bar-translucent);
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 6px 6px max(10px, env(safe-area-inset-bottom));
+}
+
+/* Reserve space at the bottom of every page on mobile so the fixed tab
+   bar doesn't cover content. ~70px = bar height + safe-area + breathing room. */
+@media (max-width: 767px) {
+  body {
+    padding-bottom: 72px;
+  }
+}
+
+/* ─── mobile drawer ─── */
 .drawer-backdrop {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(26, 24, 24, 0.4);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   animation: backdrop-fade 0.18s ease both;
 }
 .drawer-panel {
@@ -285,9 +417,8 @@ textarea {
   left: 0;
   bottom: 0;
   width: min(280px, 84vw);
-  background: var(--bg);
-  border-right: 3px solid var(--ink);
-  box-shadow: 4px 0 0 rgba(26, 24, 24, 0.06);
+  background: var(--bg-2);
+  border-right: 1px solid var(--line);
   overflow-y: auto;
   padding: 16px 14px 24px;
   animation: drawer-slide 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -296,7 +427,7 @@ textarea {
   left: auto;
   right: 0;
   border-right: none;
-  border-left: 3px solid var(--ink);
+  border-left: 1px solid var(--line);
   animation-name: drawer-slide-right;
 }
 @keyframes backdrop-fade {
@@ -311,20 +442,20 @@ textarea {
   to   { transform: translateX(0); }
 }
 
-/* Thread rows */
+/* ─── thread rows ─── */
 .thread-row {
   display: grid;
   grid-template-columns: 56px 1fr;
   gap: 14px;
-  padding: 14px 16px;
-  border-bottom: 2px dashed var(--border-soft);
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
   transition: background 120ms ease;
 }
 .thread-row:last-child {
   border-bottom: none;
 }
 .thread-row:hover {
-  background: var(--bg-2);
+  background: var(--bg-3);
 }
 @media (max-width: 639px) {
   .thread-row {
@@ -334,13 +465,15 @@ textarea {
   }
 }
 
-/* Sticky header — shorter on mobile to claw back screen real estate */
+/* ─── sticky header ─── */
 .scribble-header {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: var(--bg);
-  border-bottom: 3px solid var(--ink);
+  background: var(--surface-translucent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
   height: var(--header-h);
 }
 @media (max-width: 767px) {
@@ -353,43 +486,44 @@ textarea {
   }
 }
 
-/* Tape-style decoration (rotated cards stuck on with tape) */
+/* ─── tape-card no longer used; neutralize ─── */
 .tape-card {
   position: relative;
-  transform: rotate(-0.4deg);
+  transform: none;
 }
 .tape-card::before {
-  content: "";
-  position: absolute;
-  top: -8px;
-  left: 24px;
-  width: 60px;
-  height: 18px;
-  background: rgba(250, 204, 21, 0.55);
-  transform: rotate(-3deg);
-  border: 1px solid rgba(26, 24, 24, 0.15);
-  pointer-events: none;
-}
-.tape-card:nth-child(even) {
-  transform: rotate(0.3deg);
+  content: none;
 }
 
-/* Animations */
+/* ─── animations ─── */
 @keyframes wobble-in {
-  0% {
-    opacity: 0;
-    transform: translateY(6px) rotate(-1deg);
-  }
-  60% {
-    transform: translateY(0) rotate(0.5deg);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) rotate(0);
-  }
+  0% { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 .wobble-in {
-  animation: wobble-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: wobble-in 0.24s ease both;
+}
+
+/* HoloSeal animations — used by the seal component */
+@keyframes bs-spin { to { transform: rotate(360deg); } }
+@keyframes bs-spin-rev { to { transform: rotate(-360deg); } }
+@keyframes bs-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* Blinking terminal cursor */
+@keyframes bs-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.bs-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1em;
+  background: var(--acid);
+  vertical-align: text-bottom;
+  animation: bs-blink 1s step-end infinite;
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -408,34 +542,32 @@ textarea {
   }
 }
 
-/* Inputs in the scribbly style */
-/* Wrapped in @layer components so Tailwind utility classes (pl-9, pr-9,
-   etc.) can override these defaults via the cascade layer order
-   (components < utilities). Without the layer, .scribble-input is
-   declared after @tailwind utilities and beats pl-9 by source order. */
+/* ─── inputs ─── */
 @layer components {
   .scribble-input {
-    background: var(--paper);
-    border: 2px solid var(--ink);
-    border-radius: 12px 6px 14px 8px;
-    padding-top: 8px;
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding-top: 9px;
     padding-right: 12px;
-    padding-bottom: 8px;
+    padding-bottom: 9px;
     padding-left: 12px;
-    font-family: var(--font-body), "Patrick Hand", system-ui;
-    font-size: 16px;
-    color: var(--ink);
+    font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+    font-size: 13px;
+    color: var(--text);
     outline: none;
-    transition: box-shadow 120ms ease, transform 120ms ease;
+    transition: border-color 120ms ease, background 120ms ease;
   }
   .scribble-input:focus {
-    box-shadow: var(--pen-shadow-sm);
-    transform: translate(-1px, -1px);
+    border-color: var(--acid-line);
+    background: var(--bg-2);
   }
   .scribble-input::placeholder {
-    color: var(--muted);
+    color: var(--muted-2);
   }
 }
 
-/* (.scribble-header is defined alongside the layout rules above with
-   responsive height; this duplicate block was kept for backwards-compat.) */
+/* Acid color utilities for inline use */
+.text-acid { color: var(--acid); }
+.bg-acid { background: var(--acid); }
+.border-acid { border-color: var(--acid); }

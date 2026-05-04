@@ -38,6 +38,7 @@ function makeEnv() {
   const app = createApp({
     db,
     badgeIssuer: issuer,
+    evidence: new StubEvidenceVerifier({ ok: true }),
     perPubkeyBase58: perPubB58,
     perSecretKey: perKp.secretKey,
   });

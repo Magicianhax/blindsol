@@ -104,6 +104,22 @@ export const api = {
   claim: (body: { wallet: string; kind: string; challenge: string; signature: string }) =>
     request<ClaimResponse>("/badges/claim", { method: "POST", body: JSON.stringify(body) }),
 
+  // ── Cross-device sign-in (deterministic anon restore) ─────────────────
+  /** Issue a single-use nonce + canonical message the wallet should sign. */
+  signInChallenge: () =>
+    request<{ nonce: string; expiresAt: string; message: string }>("/auth/challenge"),
+
+  /**
+   * Redeem a signed challenge → returns every badge this wallet has on
+   * record, with fresh bearer tokens. Lives behind the deterministic
+   * anon scheme so it works on any device, after any localStorage wipe.
+   */
+  signIn: (body: { wallet: string; signature: string; nonce: string }) =>
+    request<{ badges: ClaimResponse[]; droppedDueToHoldings: number }>("/auth/sign-in", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   listPosts: (badge?: string, limit = 50) => {
     const qs = new URLSearchParams();
     if (badge) qs.set("badge", badge);
