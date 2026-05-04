@@ -124,25 +124,25 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Backdrop>
-      <div className="scribble-card wobble-in w-full max-w-lg">
-        <div className="flex items-start justify-between gap-3 border-b-2 border-dashed border-border-soft p-5">
+      <div className="my-auto w-full max-w-lg overflow-hidden rounded-md border border-line bg-bg-2 shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-line p-5">
           <div>
-            <h2 className="font-display text-2xl text-ink">
+            <h2 className="font-mono text-[18px] font-medium text-text">
               <span className="scribble-underline">pick a handle</span>
             </h2>
-            <p className="mt-1 text-sm leading-snug text-text-2">
-              Replaces the{" "}
-              <span className="font-mono">
+            <p className="mt-1.5 font-mono text-[12px] leading-relaxed text-text-2">
+              replaces the{" "}
+              <span className="text-text">
                 {active.anonId ? `${active.anonId.slice(0, 12)}…` : "anon hash"}
               </span>{" "}
-              on your <span className="font-mono">${symbol}</span> posts. Anyone can see it; nobody
-              can link it back to your wallet — that mapping stays in MagicBlock&apos;s TEE.
+              on your <span className="text-text">${symbol}</span> posts. anyone can see it; nobody
+              can link it back to your wallet — that mapping stays in magicblock&apos;s tee.
             </p>
           </div>
           <button
             onClick={onClose}
             aria-label="close"
-            className="rounded-lg border-2 border-ink p-1.5 transition hover:bg-crayon-yellow"
+            className="rounded border border-line p-1.5 text-text-2 transition hover:border-acid hover:text-acid"
           >
             <CloseIcon />
           </button>
@@ -259,8 +259,11 @@ function AvailabilityHint({ state }: { state: AvailState }) {
 }
 
 function Backdrop({ children }: { children: React.ReactNode }) {
+  // Solid dark scrim regardless of theme — `--ink` flips between light and
+  // dark, which made `bg-ink/40` near-invisible in dark mode and let the
+  // page content bleed through.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm">
       {children}
     </div>
   );

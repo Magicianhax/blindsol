@@ -6,6 +6,8 @@ import { TopNav } from "@/components/top-nav";
 import { ThreadRow } from "@/components/thread-row";
 import { TokenIcon } from "@/components/token-icon";
 import { HoloSeal, VerifiedDot } from "@/components/holo-seal";
+import { UsernameDialog } from "@/components/username-dialog";
+import { useBadge } from "@/components/badge-context";
 import { tokenFor } from "@/lib/tokens";
 import { api, ApiError, type Comment, type Post, type UserProfile } from "@/lib/api";
 
@@ -32,6 +34,13 @@ export default function ProfilePage({ params }: PageProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [pickingHandle, setPickingHandle] = useState(false);
+
+  // Identifies whether the visitor is looking at their own profile, so
+  // we can surface "pick a handle" inline instead of burying it in the
+  // header dropdown.
+  const { active: activeBadge } = useBadge();
+  const isOwnProfile = !!activeBadge?.anonId && activeBadge.anonId === anonId;
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -86,7 +95,16 @@ export default function ProfilePage({ params }: PageProps) {
           </div>
         ) : (
           <>
-            <ProfileHeader profile={profile} anonId={anonId ?? handle} />
+            <ProfileHeader
+              profile={profile}
+              anonId={anonId ?? handle}
+              isOwn={isOwnProfile}
+              onPickHandle={() => setPickingHandle(true)}
+            />
+
+            {isOwnProfile && !profile.username && (
+              <PickHandleCta onPick={() => setPickingHandle(true)} />
+            )}
 
             <div className="my-5 flex gap-2 border-b border-line">
               <TabButton
@@ -107,11 +125,55 @@ export default function ProfilePage({ params }: PageProps) {
           </>
         )}
       </main>
+
+      {pickingHandle && (
+        <UsernameDialog
+          onClose={() => {
+            setPickingHandle(false);
+            // refresh so the new handle shows in the header without
+            // the user needing to reload the page
+            refresh();
+          }}
+        />
+      )}
     </>
   );
 }
 
-function ProfileHeader({ profile, anonId }: { profile: UserProfile; anonId: string }) {
+/**
+ * Inline CTA shown above the tabs on a user's own profile when they
+ * haven't picked a handle yet. The dialog itself still lives in the
+ * header dropdown for repeat visits, but first-time visitors should
+ * see the choice surfaced where they're already looking.
+ */
+function PickHandleCta({ onPick }: { onPick: () => void }) {
+  return (
+    <div className="mt-4 flex flex-col gap-3 rounded-md border border-acid-line bg-acid-soft p-4 sm:flex-row sm:items-center">
+      <div className="min-w-0 flex-1">
+        <div className="font-mono text-[14px] font-medium text-text">pick a handle</div>
+        <p className="mt-1 font-mono text-[12px] leading-relaxed text-text-2">
+          you&apos;re posting as a long anon hash right now. claim a public handle so people can
+          recognise you across threads. no link to your wallet — that mapping stays in magicblock&apos;s tee.
+        </p>
+      </div>
+      <button onClick={onPick} className="scribble-btn scribble-btn--primary whitespace-nowrap">
+        pick a handle
+      </button>
+    </div>
+  );
+}
+
+function ProfileHeader({
+  profile,
+  anonId,
+  isOwn,
+  onPickHandle,
+}: {
+  profile: UserProfile;
+  anonId: string;
+  isOwn: boolean;
+  onPickHandle: () => void;
+}) {
   const meta = profile.badgeKind ? tokenFor(profile.badgeKind) : null;
   const symbol = meta?.symbol ?? profile.badgeKind ?? "anon";
 
@@ -142,6 +204,11 @@ function ProfileHeader({ profile, anonId }: { profile: UserProfile; anonId: stri
           {profile.firstSeen ? ` · joined ${timeAgo(profile.firstSeen)}` : ""}
         </p>
       </div>
+      {isOwn && (
+        <button onClick={onPickHandle} className="scribble-btn whitespace-nowrap">
+          {profile.username ? "manage handle" : "pick a handle"}
+        </button>
+      )}
     </div>
   );
 }
