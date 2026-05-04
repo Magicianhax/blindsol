@@ -7,17 +7,16 @@ import { ConnectButton } from "./connect-button";
 import { ClaimDialog } from "./claim-dialog";
 import { BadgeSwitcher } from "./badge-switcher";
 import { ThemeToggle } from "./theme-toggle";
+import { SearchDropdown } from "./search-dropdown";
 import { useBadge } from "./badge-context";
 
 interface TopNavProps {
-  search?: string;
-  onSearch?: (q: string) => void;
   active?: "home" | "trending" | "about" | "profile";
   /** When provided, a hamburger button appears on mobile that opens this. */
   onOpenMenu?: () => void;
 }
 
-export function TopNav({ search, onSearch, active, onOpenMenu }: TopNavProps) {
+export function TopNav({ active, onOpenMenu }: TopNavProps) {
   const { badges, active: activeBadge } = useBadge();
   const [claiming, setClaiming] = useState(false);
   const pathname = usePathname();
@@ -60,7 +59,7 @@ export function TopNav({ search, onSearch, active, onOpenMenu }: TopNavProps) {
           </nav>
 
           <div className="ml-2 hidden flex-1 max-w-md md:block">
-            <SearchBar value={search} onChange={onSearch} />
+            <SearchDropdown />
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
@@ -87,7 +86,7 @@ export function TopNav({ search, onSearch, active, onOpenMenu }: TopNavProps) {
 
       {/* Mobile-only search row */}
       <div className="border-b border-line bg-bg px-3 py-2 md:hidden">
-        <SearchBar value={search} onChange={onSearch} />
+        <SearchDropdown />
       </div>
 
       {claiming && <ClaimDialog onClose={() => setClaiming(false)} />}
@@ -118,30 +117,6 @@ function NavLink({
   );
 }
 
-function SearchBar({
-  value,
-  onChange,
-}: {
-  value?: string;
-  onChange?: (q: string) => void;
-}) {
-  return (
-    <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-2">
-        <SearchIcon />
-      </span>
-      <input
-        type="search"
-        value={value ?? ""}
-        onChange={(e) => onChange?.(e.target.value)}
-        placeholder="search threads, $TICKER, @handle"
-        className="scribble-input w-full"
-        style={{ paddingLeft: 36, fontSize: 12 }}
-      />
-    </div>
-  );
-}
-
 function Logo() {
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
@@ -160,15 +135,6 @@ function HamburgerIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
       <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <circle cx="7" cy="7" r="4.5" />
-      <path d="M10.5 10.5L14 14" strokeLinecap="round" />
     </svg>
   );
 }

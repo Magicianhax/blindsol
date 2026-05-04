@@ -16,7 +16,6 @@ export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [sort, setSort] = useState<SortKind>("new");
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -51,18 +50,6 @@ export default function HomePage() {
 
   const visiblePosts = useMemo(() => {
     let list = posts;
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((p) => {
-        const meta = tokenFor(p.badgeKind);
-        const sym = meta ? `$${meta.symbol}`.toLowerCase() : "";
-        return (
-          p.content.toLowerCase().includes(q) ||
-          p.authorAnonId.toLowerCase().includes(q) ||
-          sym.includes(q)
-        );
-      });
-    }
     if (sort === "top") {
       list = [...list].sort((a, b) => {
         const aScore = (a.upCount ?? 0) - (a.downCount ?? 0);
@@ -72,15 +59,13 @@ export default function HomePage() {
       });
     }
     return list;
-  }, [posts, sort, search]);
+  }, [posts, sort]);
 
   const filterMeta = filter ? tokenFor(filter) : undefined;
 
   return (
     <>
       <TopNav
-        search={search}
-        onSearch={setSearch}
         active={sort === "top" ? "trending" : "home"}
         onOpenMenu={() => setMenuOpen(true)}
       />
@@ -146,7 +131,7 @@ export default function HomePage() {
             {loading ? (
               <ListSkeleton />
             ) : visiblePosts.length === 0 ? (
-              <EmptyState filter={filter} hasSearch={!!search.trim()} />
+              <EmptyState filter={filter} />
             ) : (
               <ul>
                 {visiblePosts.map((p) => (
@@ -217,15 +202,7 @@ function ListSkeleton() {
   );
 }
 
-function EmptyState({ filter, hasSearch }: { filter: string | undefined; hasSearch: boolean }) {
-  if (hasSearch) {
-    return (
-      <div className="px-6 py-16 text-center">
-        <h3 className="font-mono text-[14px] text-text">no luck</h3>
-        <p className="mt-2 font-mono text-[12px] text-text-2">nothing matched. try fewer words?</p>
-      </div>
-    );
-  }
+function EmptyState({ filter }: { filter: string | undefined }) {
   return (
     <div className="px-6 py-16 text-center">
       <h3 className="font-mono text-[14px] text-text">empty.</h3>
