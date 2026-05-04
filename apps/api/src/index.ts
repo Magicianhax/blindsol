@@ -40,6 +40,8 @@ const badgeConnection = new Connection(badgeRpc, "confirmed");
 const evidence = new SolanaEvidenceVerifier(mainnetConnection);
 const onChainRegistry = initOnChainRegistry();
 
+const delegateToPER = process.env.BADGE_DELEGATE_TO_PER === "true";
+
 const badgeIssuer = new BadgeIssuer({
   db,
   evidence,
@@ -53,6 +55,23 @@ const badgeIssuer = new BadgeIssuer({
             kind,
             ownerCommitment: ownerCommitmentFromSeed(seed),
           });
+
+          // Delegate the freshly minted badge to MagicBlock's PER. Any
+          // future lifecycle mutation (revoke / slash / expire) will run
+          // privately inside the rollup. Failure here is logged but
+          // doesn't block the claim — the user still gets a valid badge,
+          // just one that lives on L1 instead of in the PER.
+          if (delegateToPER) {
+            try {
+              const del = await onChainRegistry.delegateBadge({ kind, badgeIndex: r.index });
+              console.log(`[per] delegated badge ${r.badgePubkey} (sig ${del.signature.slice(0, 12)}…)`);
+            } catch (err) {
+              console.warn(
+                `[per] delegate_badge failed for ${r.badgePubkey}: ${(err as Error).message}`,
+              );
+            }
+          }
+
           return r.badgePubkey;
         },
       }
@@ -79,6 +98,7 @@ app.listen(port, () => {
   console.log(`[api] PER attestation pubkey:  ${perKeys.publicKeyBase58}`);
   console.log(`[api] Stake-bond pipeline:     ${stakeBond ? "ENABLED (user pays)" : "disabled"}`);
   console.log(`[api] On-chain badge minting:  ${onChainRegistry ? "ENABLED" : "stubbed"}`);
+  console.log(`[api] Delegate badges to PER:  ${onChainRegistry && delegateToPER ? "ENABLED" : "disabled"}`);
 });
 
 function initOnChainRegistry() {
