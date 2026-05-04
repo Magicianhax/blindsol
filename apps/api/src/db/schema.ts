@@ -96,22 +96,36 @@ export const posts = pgTable(
  * Server-side receipts for the prepare/finalize stake-bond pipeline.
  *
  * Privacy goal: the user's wallet must never travel back through the user
- * after /prepare. The previous design returned a signed receipt blob that
- * embedded `fromWallet` in plaintext base64 — anyone holding that blob (a
- * compromised browser, a malicious extension, a logging proxy) could pull
- * the wallet out. Now /prepare stores the wallet here, returns only the
- * row id (uuid) as the opaque receipt, and /finalize looks up the row.
+ * after /prepare AND must never sit in the DB in plaintext. The previous
+ * design returned a signed receipt blob that embedded `fromWallet` in
+ * plaintext base64 — anyone holding the blob could pull the wallet out.
+ * The intermediate design (commit 0795525) moved wallet storage server-
+ * side but kept it as plaintext on this row, joinable to `posts` by
+ * `post_id` — so a DB leak still gave an attacker a complete `(wallet,
+ * anon)` mapping for every staked post.
  *
- * `consumed_at` prevents replay: once /finalize succeeds the row is marked
- * consumed, so the same prepare cannot be redeemed twice.
+ * Current design: store only `sha256(wallet)`. Verification at /finalize
+ * reads the on-chain TX, finds whichever owner was debited by ≥ expected
+ * for our mint, and confirms `sha256(that owner) === stored hash`. The
+ * security guarantee is identical (same wallet must finalize as prepared);
+ * the privacy improvement is real: a DB leak no longer reveals (wallet,
+ * post) pairs without the attacker first guessing each candidate wallet
+ * and computing its hash. Mass de-anon from a single SQL query is gone.
+ *
+ * `consumed_at` prevents replay: once /finalize succeeds the row is
+ * marked consumed, so the same prepare cannot be redeemed twice.
  */
 export const preparedStakeBonds = pgTable(
   "prepared_stake_bonds",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     postId: uuid("post_id").notNull().unique(),
-    /** Stays in the DB; never returned to clients. */
-    fromWallet: text("from_wallet").notNull(),
+    /**
+     * sha256 of the base58 wallet pubkey that requested /prepare. Used at
+     * /finalize to verify the on-chain payer matches the original prepare.
+     * Plaintext wallet never lands in the DB.
+     */
+    fromWalletHash: text("from_wallet_hash").notNull(),
     contentHash: text("content_hash").notNull(),
     expectedAmountRaw: text("expected_amount_raw").notNull(),
     expectedRecipient: text("expected_recipient").notNull(),

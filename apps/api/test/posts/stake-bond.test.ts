@@ -125,9 +125,10 @@ describe("StakeBondPipeline.prepare", () => {
     // Public response carries no wallet field.
     expect(JSON.stringify(result)).not.toContain("3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji");
 
-    // The DB row holds the wallet (server-side).
+    // The DB row holds the SHA256 of the wallet, not the plaintext.
     const row = [...db._rows.values()][0];
-    expect(row.fromWallet).toBe("3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji");
+    expect(row.fromWalletHash).toBe(sha256Hex("3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji"));
+    expect(row.fromWallet).toBeUndefined();
     expect(row.memo).toBe(result.memo);
   });
 });
@@ -185,7 +186,9 @@ describe("StakeBondPipeline.verifyOnChain", () => {
     });
 
     const resolved = await pipeline.verifyOnChain({ receiptId: prep.receiptId, txSignature: "T" });
-    expect(resolved.fromWallet).toBe("3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji");
+    expect(resolved.fromWalletHash).toBe(
+      sha256Hex("3L5MtHhAGHSw35jxd5wQXBXXQ23a46UzEJKxoPct44Ji"),
+    );
 
     // Row marked consumed.
     const row = db._rows.get(prep.receiptId)!;

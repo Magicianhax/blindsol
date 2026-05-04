@@ -70,11 +70,15 @@ export interface PreparedStakeBond {
   expiresAt: number;
 }
 
-/** Internal — what the DB row looks like once resolved. */
+/** Internal — what the DB row looks like once resolved. Wallet plaintext is
+ * deliberately absent: the row stores only `sha256(wallet)`, and finalize
+ * verifies by hashing the on-chain payer and comparing.
+ */
 export interface ResolvedReceipt {
   postId: string;
   contentHash: string;
-  fromWallet: string;
+  /** sha256 of the wallet that requested /prepare. */
+  fromWalletHash: string;
   expectedAmountRaw: string;
   expectedRecipient: string;
   memo: string;
@@ -125,11 +129,16 @@ export class StakeBondPipeline {
     const ttlSec = this.cfg.ttlSeconds ?? 300;
     const expiresAt = new Date(Date.now() + ttlSec * 1000);
 
+    // Hash the wallet before it touches the DB. The plaintext value is used
+    // here only to build the unsigned MagicBlock TX (via `client.buildTransfer`
+    // above) and is then dropped — it never reaches a row.
+    const fromWalletHash = sha256Hex(args.fromWallet);
+
     const [inserted] = await this.cfg.db
       .insert(schema.preparedStakeBonds)
       .values({
         postId: args.postId,
-        fromWallet: args.fromWallet,
+        fromWalletHash,
         contentHash: args.contentHash,
         expectedAmountRaw: this.cfg.minAmountRaw.toString(),
         expectedRecipient: this.cfg.stakePool.toBase58(),
@@ -187,13 +196,16 @@ export class StakeBondPipeline {
     }
 
     // Private transfers settle into the PER vault, not the recipient ATA,
-    // so verify by checking that the SENDER was debited by ≥ expected.
-    const fromKey = new PublicKey(row.fromWallet);
-    const debited = senderDebit(tx, this.cfg.mint, fromKey);
+    // so verify by inspecting which token-account owner was DEBITED for
+    // our mint. We discover the payer from the TX, hash it, and verify
+    // it matches the hash we stored at /prepare time. No plaintext wallet
+    // ever lives on the row.
     const expected = BigInt(row.expectedAmountRaw);
-    if (debited < expected) {
+    const payer = findPayer(tx, this.cfg.mint, expected, row.fromWalletHash);
+    if (!payer) {
       throw new StakeBondError(
-        `stake debit too low: debited=${debited} expected≥${expected}`,
+        `no token-balance owner debited ≥${expected} of mint ${this.cfg.mint.toBase58()} ` +
+          `with hash matching the prepare`,
       );
     }
 
@@ -218,7 +230,7 @@ export class StakeBondPipeline {
     return {
       postId: row.postId,
       contentHash: row.contentHash,
-      fromWallet: row.fromWallet,
+      fromWalletHash: row.fromWalletHash,
       expectedAmountRaw: row.expectedAmountRaw,
       expectedRecipient: row.expectedRecipient,
       memo: row.memo,
@@ -259,33 +271,51 @@ function txCarriesMemo(
 }
 
 /**
- * How much SPL `mint` left the sender's token accounts in this tx. Used to
- * verify private transfers: the recipient's base-layer ATA never receives
- * funds (settlement happens inside the PER), so we check the sender debit.
+ * Find the token-account owner that was debited for `mint` by ≥ `minDebit`
+ * AND whose `sha256(owner)` matches `expectedHash`. Returns the owner pubkey
+ * (string) or `null` if no candidate qualifies.
+ *
+ * Used because we no longer store the plaintext wallet on the receipt row —
+ * the on-chain TX is the authoritative source of "who paid", and we verify
+ * it's the same wallet that called /prepare by comparing hashes.
  */
-function senderDebit(
+function findPayer(
   tx: ParsedTransactionWithMeta | TransactionResponse,
   mint: PublicKey,
-  sender: PublicKey,
-): bigint {
+  minDebit: bigint,
+  expectedHash: string,
+): string | null {
+  const mintStr = mint.toBase58();
   const pre = tx.meta?.preTokenBalances ?? [];
   const post = tx.meta?.postTokenBalances ?? [];
-  const senderStr = sender.toBase58();
-  const mintStr = mint.toBase58();
 
-  let preAmount = 0n;
+  // Aggregate owner → balance for our mint, pre and post.
+  const preByOwner = new Map<string, bigint>();
+  const postByOwner = new Map<string, bigint>();
   for (const b of pre) {
-    if (b.owner === senderStr && b.mint === mintStr) {
-      preAmount = BigInt(b.uiTokenAmount.amount);
+    if (b.mint === mintStr && b.owner) {
+      preByOwner.set(b.owner, (preByOwner.get(b.owner) ?? 0n) + BigInt(b.uiTokenAmount.amount));
     }
   }
-  let postAmount = 0n;
   for (const b of post) {
-    if (b.owner === senderStr && b.mint === mintStr) {
-      postAmount = BigInt(b.uiTokenAmount.amount);
+    if (b.mint === mintStr && b.owner) {
+      postByOwner.set(b.owner, (postByOwner.get(b.owner) ?? 0n) + BigInt(b.uiTokenAmount.amount));
     }
   }
-  return preAmount > postAmount ? preAmount - postAmount : 0n;
+
+  // Walk every owner that appeared in pre balances; compute debit; if it
+  // satisfies the threshold AND its sha256 matches the prepare hash, that's
+  // our payer. Multiple candidates are possible in theory (a TX could touch
+  // many owners) — we return the first hash-match. The hash check ensures
+  // we accept exactly the wallet that was on the prepare row.
+  for (const [owner, before] of preByOwner) {
+    const after = postByOwner.get(owner) ?? 0n;
+    const debited = before > after ? before - after : 0n;
+    if (debited >= minDebit && sha256Hex(owner) === expectedHash) {
+      return owner;
+    }
+  }
+  return null;
 }
 
 export function sha256Hex(input: string): string {
