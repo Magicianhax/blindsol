@@ -6,62 +6,57 @@ import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { ClaimDialog } from "./claim-dialog";
 import { useBadge } from "./badge-context";
+import { TokenIcon } from "./token-icon";
+import { HoloSeal } from "./holo-seal";
+import { TOKENS, TOKEN_KINDS, tokenFor } from "@/lib/tokens";
 
 type TabId = "feed" | "tokens" | "post" | "purse" | "me";
 
 /**
  * Bottom-tab navigation rendered on every page on mobile. Five slots
- * matching the design's pattern. Tabs adapt to the user's auth state:
- *   - "post" / "purse" / "me" surface a login or claim CTA when the
- *     prerequisite isn't met, instead of a dead-end navigation.
- *   - "feed" and "tokens" always navigate.
- *
- * Mounted globally in the root layout so it persists across page transitions.
+ * matching the design's pattern. Tabs adapt to the user's auth state
+ * (post / purse / me surface a login or claim CTA when prerequisites
+ * aren't met) and surface real content via bottom-sheets for screens
+ * that don't have dedicated routes yet (tokens, purse).
  */
 export function MobileTabBar() {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const { authenticated, login, ready } = usePrivy();
-  const { badges, active: activeBadge } = useBadge();
+  const { badges, active: activeBadge, setActive } = useBadge();
   const [claiming, setClaiming] = useState(false);
+  const [showTokens, setShowTokens] = useState(false);
+  const [showPurse, setShowPurse] = useState(false);
 
   const hasBadge = badges.length > 0;
+  const profileHref = activeBadge?.anonId ? `/u/${activeBadge.anonId}` : null;
 
-  // Map current pathname to a logical tab id so the active highlight is
-  // consistent regardless of which screen the user is on.
   const current: TabId = pathname.startsWith("/u/")
     ? "me"
     : pathname.startsWith("/about")
-    ? "tokens"
+    ? "feed"
     : "feed";
 
-  const profileHref = activeBadge?.anonId ? `/u/${activeBadge.anonId}` : null;
-
-  // CTA triggers — surfaced as the action on tabs that need an authed user
-  // or a claimed badge. Kept inline so each tab can pick the right one.
   const requireConnect = () => {
     if (!ready) return;
     login();
   };
   const requireBadge = () => setClaiming(true);
 
-  /** "post" — needs both a wallet connection AND a badge to compose. */
+  const onTokens = () => setShowTokens(true);
+
   const onPost = () => {
     if (!authenticated) return requireConnect();
     if (!hasBadge) return requireBadge();
     router.push("/");
   };
 
-  /** "purse" — needs a badge. Without one, prompt to claim. */
   const onPurse = () => {
     if (!authenticated) return requireConnect();
     if (!hasBadge) return requireBadge();
-    // No dedicated /purse screen yet — bouncing home so the user
-    // lands in a known-good state with their badges visible.
-    router.push("/");
+    setShowPurse(true);
   };
 
-  /** "me" — without a badge there is no profile to show. */
   const onMe = () => {
     if (!authenticated) return requireConnect();
     if (!profileHref) return requireBadge();
@@ -72,11 +67,17 @@ export function MobileTabBar() {
     <>
       <nav className="mobile-tab-bar md:hidden">
         <TabLink id="feed" current={current} href="/" label="feed" icon={<FeedIcon />} />
-        <TabLink id="tokens" current={current} href="/about" label="tokens" icon={<HashIcon />} />
+        <TabButton
+          id="tokens"
+          current={showTokens ? "tokens" : current}
+          label="tokens"
+          icon={<HashIcon />}
+          onClick={onTokens}
+        />
         <PostTab onClick={onPost} />
         <TabButton
           id="purse"
-          current={current}
+          current={showPurse ? "purse" : current}
           label="purse"
           icon={<BagIcon />}
           onClick={onPurse}
@@ -90,9 +91,35 @@ export function MobileTabBar() {
       </nav>
 
       {claiming && <ClaimDialog onClose={() => setClaiming(false)} />}
+
+      {showTokens && (
+        <TokensSheet
+          onClose={() => setShowTokens(false)}
+          onPick={(kind) => {
+            setShowTokens(false);
+            router.push(`/?filter=${kind}`);
+          }}
+        />
+      )}
+
+      {showPurse && (
+        <PurseSheet
+          onClose={() => setShowPurse(false)}
+          onSwitch={(badgeId) => {
+            setActive(badgeId);
+            setShowPurse(false);
+          }}
+          onClaimMore={() => {
+            setShowPurse(false);
+            setClaiming(true);
+          }}
+        />
+      )}
     </>
   );
 }
+
+/* ─── Tabs ─── */
 
 function MeTab({
   current,
@@ -105,8 +132,6 @@ function MeTab({
   hasBadge: boolean;
   onClick: () => void;
 }) {
-  // Different label depending on auth state so users understand what tapping
-  // here will do, instead of seeing "me" with no actual profile to show.
   const label = !authed ? "login" : !hasBadge ? "claim" : "me";
   const active = current === "me" && hasBadge;
   const icon = !authed ? <PowerIcon /> : !hasBadge ? <PlusBadgeIcon /> : <UserIcon />;
@@ -185,6 +210,143 @@ function iconWrapClass(active: boolean) {
   return `flex h-7 items-center justify-center ${active ? "text-acid" : "text-muted"}`;
 }
 
+/* ─── Sheets ─── */
+
+function Sheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm md:hidden"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-h-[80vh] overflow-hidden rounded-t-xl border-t border-line bg-bg-2"
+        onClick={(e) => e.stopPropagation()}
+        style={{ paddingBottom: "max(72px, env(safe-area-inset-bottom))" }}
+      >
+        <header className="flex items-center justify-between border-b border-line px-4 py-3">
+          <h2 className="font-mono text-[14px] uppercase tracking-[0.08em] text-text">{title}</h2>
+          <button
+            onClick={onClose}
+            aria-label="close"
+            className="rounded border border-line p-1.5 text-text-2 transition hover:border-acid hover:text-acid"
+          >
+            <CloseIcon />
+          </button>
+        </header>
+        <div className="overflow-y-auto" style={{ maxHeight: "calc(80vh - 60px)" }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TokensSheet({
+  onClose,
+  onPick,
+}: {
+  onClose: () => void;
+  onPick: (kind: string) => void;
+}) {
+  return (
+    <Sheet title="all tokens" onClose={onClose}>
+      <ul className="divide-y divide-line">
+        {TOKEN_KINDS.map((kind) => {
+          const meta = TOKENS[kind]!;
+          return (
+            <li key={kind}>
+              <button
+                onClick={() => onPick(kind)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-bg-3"
+              >
+                <TokenIcon kind={kind} size={28} />
+                <div className="flex-1 min-w-0 leading-tight">
+                  <div className="font-mono text-[14px] text-text">${meta.symbol}</div>
+                  <div className="truncate font-mono text-[11px] text-muted">{meta.label}</div>
+                </div>
+                <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-2">
+                  open →
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Sheet>
+  );
+}
+
+function PurseSheet({
+  onClose,
+  onSwitch,
+  onClaimMore,
+}: {
+  onClose: () => void;
+  onSwitch: (badgeId: string) => void;
+  onClaimMore: () => void;
+}) {
+  const { badges, active } = useBadge();
+  return (
+    <Sheet title="badge purse" onClose={onClose}>
+      {badges.length === 0 ? (
+        <div className="px-4 py-8 text-center font-mono text-[12px] text-muted">
+          no badges yet. claim one to start posting.
+        </div>
+      ) : (
+        <ul className="divide-y divide-line">
+          {badges.map((b) => {
+            const meta = tokenFor(b.kind);
+            const isActive = active?.badgeId === b.badgeId;
+            return (
+              <li key={b.badgeId}>
+                <button
+                  onClick={() => onSwitch(b.badgeId)}
+                  className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
+                    isActive ? "bg-acid-soft" : "hover:bg-bg-3"
+                  }`}
+                >
+                  <HoloSeal hash={b.anonId ?? b.kind} size={32} animate={isActive} />
+                  <div className="flex-1 min-w-0 leading-tight">
+                    <div className={`font-mono text-[14px] ${isActive ? "text-acid" : "text-text"}`}>
+                      ${meta?.symbol ?? b.kind}
+                    </div>
+                    <div className="truncate font-mono text-[10px] text-muted-2">
+                      {b.anonId ?? b.kind}
+                    </div>
+                  </div>
+                  {isActive && (
+                    <span className="rounded border border-acid-line bg-acid-soft px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-acid">
+                      active
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="border-t border-line p-3">
+        <button
+          onClick={onClaimMore}
+          className="scribble-btn scribble-btn--primary w-full justify-center"
+        >
+          + claim another badge
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+/* ─── Icons ─── */
+
 function FeedIcon() {
   return (
     <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -242,6 +404,13 @@ function PlusBadgeIcon() {
       <path d="M12 3l3 1v3 c0 3-2 5-5 5.5 -3-.5-5-2.5-5-5.5V4l3-1z" strokeLinejoin="round" transform="translate(-2 0)" />
       <line x1="11" y1="6" x2="15" y2="6" strokeLinecap="round" />
       <line x1="13" y1="4" x2="13" y2="8" strokeLinecap="round" />
+    </svg>
+  );
+}
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round" />
     </svg>
   );
 }
