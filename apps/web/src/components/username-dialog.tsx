@@ -70,13 +70,13 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
     return (
       <Backdrop>
         <div className="scribble-card wobble-in w-full max-w-md p-5">
-          <h2 className="font-display text-2xl text-ink">no active badge</h2>
-          <p className="mt-1 text-sm text-text-2">
+          <h2 className="text-2xl font-semibold text-text">No active badge</h2>
+          <p className="mt-1 text-sm text-muted">
             Claim a badge first; usernames are bound to a specific badge anon.
           </p>
           <div className="mt-3 flex justify-end">
             <button onClick={onClose} className="scribble-btn scribble-btn--ghost">
-              close
+              Close
             </button>
           </div>
         </div>
@@ -124,25 +124,25 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Backdrop>
-      <div className="my-auto w-full max-w-lg overflow-hidden rounded-md border border-line bg-bg-2 shadow-2xl">
+      <div className="my-auto w-full max-w-lg overflow-hidden rounded-xl border border-line bg-bg shadow-md">
         <div className="flex items-start justify-between gap-3 border-b border-line p-5">
           <div>
-            <h2 className="font-mono text-[18px] font-medium text-text">
-              <span className="scribble-underline">pick a handle</span>
+            <h2 className="text-[18px] font-semibold text-text">
+              Pick a handle
             </h2>
-            <p className="mt-1.5 font-mono text-[12px] leading-relaxed text-text-2">
-              replaces the{" "}
-              <span className="text-text">
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted">
+              Replaces the{" "}
+              <span className="font-numeric text-text-2">
                 {active.anonId ? `${active.anonId.slice(0, 12)}…` : "anon hash"}
               </span>{" "}
-              on your <span className="text-text">${symbol}</span> posts. anyone can see it; nobody
-              can link it back to your wallet — that mapping stays in magicblock&apos;s tee.
+              on your <span className="text-text">${symbol}</span> posts. Anyone can see it; nobody
+              can link it back to your wallet — that mapping stays in MagicBlock&apos;s TEE.
             </p>
           </div>
           <button
             onClick={onClose}
-            aria-label="close"
-            className="rounded border border-line p-1.5 text-text-2 transition hover:border-acid hover:text-acid"
+            aria-label="Close"
+            className="rounded-lg p-1.5 text-muted transition hover:bg-bg-3 hover:text-text"
           >
             <CloseIcon />
           </button>
@@ -151,11 +151,11 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
         <div className="p-5">
           <div className="mb-4 flex items-center gap-2 text-[13px] text-muted">
             <TokenIcon kind={active.kind} size={22} />
-            <span className="font-display text-base text-ink">${symbol}</span>
+            <span className="text-[15px] font-semibold text-text">${symbol}</span>
             {active.anonId ? (
               <>
                 <span className="text-muted-2">·</span>
-                <span className="font-mono text-[12px]">{active.anonId}</span>
+                <span className="font-numeric text-[12px]">{active.anonId}</span>
               </>
             ) : null}
           </div>
@@ -168,11 +168,11 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
           ) : current ? (
             // Already has a handle — schema enforces one per anon. Force
             // release-first instead of letting them type into a doomed input.
-            <div className="rounded-lg border-2 border-ink bg-crayon-yellow/30 px-4 py-4">
-              <div className="font-display text-xl text-ink">
-                you already post as <span className="font-mono">@{current}</span>
+            <div className="rounded-lg border border-line bg-bg-3 px-4 py-4">
+              <div className="text-[15px] font-semibold text-text">
+                You already post as <span className="font-numeric">@{current}</span>
               </div>
-              <p className="mt-1 text-sm text-text-2">
+              <p className="mt-1 text-sm text-muted">
                 One handle per badge. Release this one before picking a different name — your
                 existing posts will revert to displaying the anon hash.
               </p>
@@ -181,17 +181,17 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
                 disabled={busy}
                 className="scribble-btn scribble-btn--red mt-3"
               >
-                {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
-                {busy ? "releasing…" : `release @${current}`}
+                {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-danger/40 border-t-danger" />}
+                {busy ? "Releasing…" : `Release @${current}`}
               </button>
             </div>
           ) : (
             <>
-              <label className="block text-sm text-text-2" htmlFor="handle-input">
-                new handle
+              <label className="block text-sm text-muted" htmlFor="handle-input">
+                New handle
               </label>
               <div className="mt-1 flex items-center gap-2">
-                <span className="font-display text-2xl text-muted">@</span>
+                <span className="font-numeric text-2xl text-muted-2">@</span>
                 <input
                   id="handle-input"
                   type="text"
@@ -209,14 +209,14 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
           )}
 
           {err && (
-            <div className="mt-3 rounded-lg border-2 border-crayon-red bg-crayon-red/10 px-3 py-1.5 text-sm text-crayon-red">
+            <div className="mt-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-1.5 text-sm text-danger">
               {err}
             </div>
           )}
 
           <div className="mt-5 flex justify-end gap-2">
             <button onClick={onClose} className="scribble-btn scribble-btn--ghost">
-              {current ? "close" : "nevermind"}
+              {current ? "Close" : "Nevermind"}
             </button>
             {/* Hide claim button when the user already has a handle —
                 schema enforces one-per-anon, so the button can't succeed
@@ -227,8 +227,8 @@ export function UsernameDialog({ onClose }: { onClose: () => void }) {
                 disabled={busy || avail.kind !== "available"}
                 className="scribble-btn scribble-btn--primary"
               >
-                {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
-                {busy ? "claiming…" : "claim handle"}
+                {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-bg/40 border-t-bg" />}
+                {busy ? "Claiming…" : "Claim handle"}
               </button>
             )}
           </div>
@@ -247,15 +247,15 @@ function AvailabilityHint({ state }: { state: AvailState }) {
   }
   if (state.kind === "available") {
     return (
-      <p className="mt-1 text-xs text-crayon-green">
-        ✓ <span className="font-mono">@{state.normalized}</span> is available
+      <p className="mt-1 text-xs text-acid">
+        ✓ <span className="font-numeric">@{state.normalized}</span> is available
       </p>
     );
   }
   if (state.kind === "taken") {
-    return <p className="mt-1 text-xs text-crayon-red">✗ taken</p>;
+    return <p className="mt-1 text-xs text-danger">✗ taken</p>;
   }
-  return <p className="mt-1 text-xs text-crayon-red">✗ {state.reason}</p>;
+  return <p className="mt-1 text-xs text-danger">✗ {state.reason}</p>;
 }
 
 function Backdrop({ children }: { children: React.ReactNode }) {

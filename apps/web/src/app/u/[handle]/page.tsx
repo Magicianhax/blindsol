@@ -78,20 +78,23 @@ export default function ProfilePage({ params }: PageProps) {
     <>
       <TopNav />
       <main className="mx-auto max-w-3xl px-4 py-6">
-        <Link href="/" className="scribble-btn scribble-btn--ghost mb-5 inline-flex">
+        <Link
+          href="/"
+          className="mb-5 inline-flex items-center gap-1.5 text-[13px] text-muted transition hover:text-text"
+        >
           <BackIcon />
-          back
+          Back to feed
         </Link>
 
         {err === "not_found" ? (
           <NotFound handle={handle} />
         ) : err ? (
-          <div className="rounded border border-danger/40 bg-danger/10 p-3 font-mono text-[12px] text-danger">
-            oops — {err}
+          <div className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5 text-[13px] text-danger">
+            Error: {err}
           </div>
         ) : loading || !profile ? (
-          <div className="scribble-card p-10 text-center font-mono text-[13px] text-muted">
-            loading…
+          <div className="scribble-card p-10 text-center text-[13px] text-muted">
+            Loading…
           </div>
         ) : (
           <>
@@ -148,16 +151,16 @@ export default function ProfilePage({ params }: PageProps) {
  */
 function PickHandleCta({ onPick }: { onPick: () => void }) {
   return (
-    <div className="mt-4 flex flex-col gap-3 rounded-md border border-acid-line bg-acid-soft p-4 sm:flex-row sm:items-center">
+    <div className="mt-4 flex flex-col gap-3 rounded-xl border border-line bg-bg p-4 shadow-sm sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
-        <div className="font-mono text-[14px] font-medium text-text">pick a handle</div>
-        <p className="mt-1 font-mono text-[12px] leading-relaxed text-text-2">
-          you&apos;re posting as a long anon hash right now. claim a public handle so people can
-          recognise you across threads. no link to your wallet — that mapping stays in magicblock&apos;s tee.
+        <div className="text-[14px] font-medium text-text">Pick a handle</div>
+        <p className="mt-1 text-[12px] leading-relaxed text-text-2">
+          You&apos;re posting as a long anon hash right now. Claim a public handle so people can
+          recognise you across threads. No link to your wallet — that mapping stays in MagicBlock&apos;s TEE.
         </p>
       </div>
       <button onClick={onPick} className="scribble-btn scribble-btn--primary whitespace-nowrap">
-        pick a handle
+        Pick a handle
       </button>
     </div>
   );
@@ -182,9 +185,9 @@ function ProfileHeader({
       <HoloSeal hash={anonId} size={64} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">
-          <h1 className="font-mono text-[24px] font-medium leading-tight tracking-tight text-text">
+          <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-text">
             {profile.username ? `@${profile.username}` : (
-              <span className="font-mono text-[16px] text-text-2">{anonId}</span>
+              <span className="font-numeric text-[16px] text-text-2">{anonId}</span>
             )}
           </h1>
           {profile.badgeKind ? (
@@ -196,17 +199,17 @@ function ProfileHeader({
           <VerifiedDot />
         </div>
         {profile.username && (
-          <p className="mt-1.5 break-all font-mono text-[11px] text-muted">{anonId}</p>
+          <p className="mt-1.5 break-all font-numeric text-[11px] text-muted">{anonId}</p>
         )}
-        <p className="mt-2 font-mono text-[12px] text-text-2">
-          <span className="text-text">{profile.postCount}</span> posts ·{" "}
-          <span className="text-text">{profile.commentCount}</span> comments
+        <p className="mt-2 text-[12px] text-text-2">
+          <span className="font-numeric text-text">{profile.postCount}</span> posts ·{" "}
+          <span className="font-numeric text-text">{profile.commentCount}</span> comments
           {profile.firstSeen ? ` · joined ${timeAgo(profile.firstSeen)}` : ""}
         </p>
       </div>
       {isOwn && (
         <button onClick={onPickHandle} className="scribble-btn whitespace-nowrap">
-          {profile.username ? "manage handle" : "pick a handle"}
+          {profile.username ? "Manage handle" : "Pick a handle"}
         </button>
       )}
     </div>
@@ -227,44 +230,36 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`-mb-px rounded-t px-4 py-2.5 font-mono text-[12px] uppercase tracking-[0.06em] transition ${
+      className={`-mb-px rounded-t px-4 py-2.5 text-[13px] transition ${
         active
-          ? "border-b-2 border-acid text-acid"
+          ? "border-b-2 border-acid font-medium text-acid"
           : "border-b-2 border-transparent text-muted hover:text-text"
       }`}
     >
-      {label}{" "}
-      <span className="font-mono text-[11px] text-muted-2">{count}</span>
+      <span className="capitalize">{label}</span>{" "}
+      <span className="font-numeric text-[11px] text-muted-2">{count}</span>
     </button>
   );
 }
 
 function PostsList({ posts }: { posts: Post[] }) {
   if (posts.length === 0) {
-    return (
-      <div className="scribble-card-flat p-10 text-center font-mono text-[13px] text-muted">
-        no threads yet.
-      </div>
-    );
+    return <div className="py-10 text-center text-[13px] text-muted">No threads yet.</div>;
   }
   return (
-    <div className="scribble-card overflow-hidden">
-      <ul>
-        {posts.map((p) => (
-          <li key={p.id}>
-            <ThreadRow post={p} />
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ol className="-mx-2">
+      {posts.map((p, i) => (
+        <ThreadRow key={p.id} post={p} rank={i + 1} />
+      ))}
+    </ol>
   );
 }
 
 function CommentsList({ comments }: { comments: Comment[] }) {
   if (comments.length === 0) {
     return (
-      <div className="scribble-card-flat p-10 text-center font-mono text-[13px] text-muted">
-        no comments yet.
+      <div className="scribble-card-flat p-10 text-center text-[13px] text-muted">
+        No comments yet.
       </div>
     );
   }
@@ -277,18 +272,18 @@ function CommentsList({ comments }: { comments: Comment[] }) {
           <li key={c.id}>
             <Link
               href={`/post/${c.postId}`}
-              className="scribble-card-flat block px-4 py-3 transition hover:border-line-2"
+              className="group scribble-card-flat block px-4 py-3 transition hover:border-line-2"
             >
-              <header className="flex items-center gap-2 font-mono text-[11px] text-muted">
+              <header className="flex items-center gap-2 text-[13px] text-muted">
                 <TokenIcon kind={c.badgeKind} size={14} />
-                <span className="text-text">${symbol}</span>
+                <span className="text-text-2">${symbol}</span>
                 <span className="text-muted-2">·</span>
                 <span>{timeAgo(c.createdAt)}</span>
-                <span className="ml-auto text-[10px] uppercase tracking-[0.06em] text-acid">
-                  in thread →
+                <span className="ml-auto text-muted transition group-hover:text-text">
+                  View thread →
                 </span>
               </header>
-              <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-text">
+              <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text">
                 {c.content}
               </p>
             </Link>
@@ -302,10 +297,10 @@ function CommentsList({ comments }: { comments: Comment[] }) {
 function NotFound({ handle }: { handle: string }) {
   return (
     <div className="scribble-card p-10 text-center">
-      <h1 className="font-mono text-[20px] font-medium text-text">no such handle</h1>
-      <p className="mt-2 font-mono text-[13px] text-text-2">
-        couldn&apos;t resolve <span className="text-text">{handle}</span>. check the spelling, or it
-        may have been released.
+      <h1 className="text-[20px] font-semibold text-text">No such handle</h1>
+      <p className="mt-2 text-[13px] text-text-2">
+        Couldn&apos;t resolve <span className="font-numeric text-text">{handle}</span>. Check the
+        spelling, or it may have been released.
       </p>
     </div>
   );

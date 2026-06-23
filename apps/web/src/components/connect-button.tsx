@@ -15,7 +15,7 @@ export function ConnectButton() {
   if (!ready) {
     return (
       <button disabled className="scribble-btn h-8 opacity-60">
-        <span className="font-mono text-sm">…</span>
+        <span className="text-sm">…</span>
       </button>
     );
   }
@@ -38,8 +38,8 @@ export function ConnectButton() {
       className="scribble-btn h-8 whitespace-nowrap"
       title="Click to disconnect"
     >
-      <span className="h-2 w-2 shrink-0 rounded-full bg-acid" />
-      <span className="hidden font-mono text-[11px] sm:inline">{short}</span>
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-acid" />
+      <span className="hidden font-numeric text-[11px] sm:inline">{short}</span>
     </button>
   );
 }

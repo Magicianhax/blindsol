@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ConnectButton } from "./connect-button";
 import { ClaimDialog } from "./claim-dialog";
@@ -11,54 +10,26 @@ import { SearchDropdown } from "./search-dropdown";
 import { useBadge } from "./badge-context";
 
 interface TopNavProps {
+  /** Kept for call-site compatibility; the bar no longer renders inline nav. */
   active?: "home" | "trending" | "about" | "profile";
-  /** When provided, a hamburger button appears on mobile that opens this. */
-  onOpenMenu?: () => void;
 }
 
-export function TopNav({ active, onOpenMenu }: TopNavProps) {
-  const { badges, active: activeBadge } = useBadge();
+export function TopNav(_props: TopNavProps) {
+  const { badges } = useBadge();
   const [claiming, setClaiming] = useState(false);
-  const pathname = usePathname();
-  const profileActive = active === "profile" || pathname?.startsWith("/u/");
 
   return (
     <>
       <header className="scribble-header">
-        <div className="mx-auto flex h-full max-w-[1280px] items-center gap-3 px-3 sm:gap-4 sm:px-5">
-          {onOpenMenu && (
-            <button
-              type="button"
-              onClick={onOpenMenu}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-line text-text-2 transition hover:border-acid hover:text-acid md:hidden"
-              aria-label="Open navigation menu"
-            >
-              <HamburgerIcon />
-            </button>
-          )}
-
-          <Link href="/" className="flex items-center gap-2.5">
+        <div className="mx-auto flex h-full max-w-[748px] items-center gap-3 px-3 sm:px-4">
+          <Link href="/" className="flex shrink-0 items-center gap-2">
             <Logo />
-            <span className="font-mono text-[15px] font-semibold leading-none tracking-tight">
+            <span className="text-[16px] font-semibold leading-none tracking-tight">
               blind<span className="text-acid">sol</span>
-            </span>
-            <span className="hidden font-mono text-[9px] uppercase tracking-[0.12em] text-muted sm:inline">
-              v0.1 · mainnet beta
             </span>
           </Link>
 
-          <nav className="ml-2 hidden items-center gap-1 md:flex">
-            <NavLink href="/" active={active === "home"}>feed</NavLink>
-            <NavLink href="/?sort=top" active={active === "trending"}>trending</NavLink>
-            <NavLink href="/about" active={active === "about"}>how it works</NavLink>
-            {activeBadge?.anonId ? (
-              <NavLink href={`/u/${activeBadge.anonId}`} active={!!profileActive}>
-                profile
-              </NavLink>
-            ) : null}
-          </nav>
-
-          <div className="ml-2 hidden flex-1 max-w-md md:block">
+          <div className="ml-1 hidden min-w-0 flex-1 md:block">
             <SearchDropdown />
           </div>
 
@@ -68,14 +39,12 @@ export function TopNav({ active, onOpenMenu }: TopNavProps) {
             ) : (
               <button
                 onClick={() => setClaiming(true)}
-                className="scribble-btn scribble-btn--primary"
+                className="scribble-btn scribble-btn--primary px-3 py-1.5 text-[13px]"
               >
-                <span className="hidden sm:inline">claim a badge</span>
-                <span className="sm:hidden">claim</span>
+                <span className="hidden sm:inline">Claim a badge</span>
+                <span className="sm:hidden">Claim</span>
               </button>
             )}
-            {/* Theme toggle hidden on phones — surfaced in the bottom-tab
-                menu later. Keeping the top bar compact on small screens. */}
             <span className="hidden sm:inline-flex">
               <ThemeToggle />
             </span>
@@ -94,56 +63,16 @@ export function TopNav({ active, onOpenMenu }: TopNavProps) {
   );
 }
 
-function NavLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`relative inline-flex items-center rounded px-3 py-1.5 font-mono text-[12px] uppercase leading-none tracking-[0.06em] transition ${
-        active
-          ? "border border-acid-line bg-bg-3 text-acid"
-          : "border border-transparent text-text-2 hover:text-acid"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
-
 function Logo() {
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
       src="/blindSOL.png"
       alt="BlindSol"
-      width={28}
-      height={28}
-      className="h-7 w-7 shrink-0 select-none"
+      width={26}
+      height={26}
+      className="h-[26px] w-[26px] shrink-0 select-none"
       draggable={false}
     />
-  );
-}
-
-function HamburgerIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M4 7h16M4 12h16M4 17h16" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ProfileIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <circle cx="8" cy="6" r="2.5" />
-      <path d="M3 14 Q3 9.5 8 9.5 Q13 9.5 13 14" strokeLinecap="round" />
-    </svg>
   );
 }

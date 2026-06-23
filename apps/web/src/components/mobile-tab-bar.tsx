@@ -191,9 +191,9 @@ function PostTab({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-1 flex-col items-center gap-1 py-1.5 font-mono text-[9px] text-muted"
+      className="flex flex-1 flex-col items-center gap-1 py-1.5 text-[9px] text-muted"
     >
-      <span className="flex h-9 w-9 items-center justify-center rounded-md border border-acid bg-acid text-bg">
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-acid text-bg">
         <PlusIcon />
       </span>
       <span>post</span>
@@ -202,7 +202,7 @@ function PostTab({ onClick }: { onClick: () => void }) {
 }
 
 function tabClass(active: boolean) {
-  return `flex flex-1 flex-col items-center gap-1 py-1.5 font-mono text-[9px] transition ${
+  return `flex flex-1 flex-col items-center gap-1 py-1.5 text-[9px] transition ${
     active ? "text-acid" : "text-muted hover:text-text"
   }`;
 }
@@ -227,16 +227,16 @@ function Sheet({
       onClick={onClose}
     >
       <div
-        className="w-full max-h-[80vh] overflow-hidden rounded-t-xl border-t border-line bg-bg-2"
+        className="w-full max-h-[80vh] overflow-hidden rounded-t-xl border-t border-line bg-bg shadow-md"
         onClick={(e) => e.stopPropagation()}
         style={{ paddingBottom: "max(72px, env(safe-area-inset-bottom))" }}
       >
         <header className="flex items-center justify-between border-b border-line px-4 py-3">
-          <h2 className="font-mono text-[14px] uppercase tracking-[0.08em] text-text">{title}</h2>
+          <h2 className="text-[14px] font-semibold text-text">{title}</h2>
           <button
             onClick={onClose}
             aria-label="close"
-            className="rounded border border-line p-1.5 text-text-2 transition hover:border-acid hover:text-acid"
+            className="rounded-lg border border-line p-1.5 text-text-2 transition hover:bg-bg-2 hover:text-text"
           >
             <CloseIcon />
           </button>
@@ -265,14 +265,14 @@ function TokensSheet({
             <li key={kind}>
               <button
                 onClick={() => onPick(kind)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-bg-3"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-bg-2"
               >
                 <TokenIcon kind={kind} size={28} />
                 <div className="flex-1 min-w-0 leading-tight">
-                  <div className="font-mono text-[14px] text-text">${meta.symbol}</div>
-                  <div className="truncate font-mono text-[11px] text-muted">{meta.label}</div>
+                  <div className="font-numeric text-[14px] text-text">${meta.symbol}</div>
+                  <div className="truncate text-[11px] text-muted">{meta.label}</div>
                 </div>
-                <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-2">
+                <span className="text-[11px] text-muted-2">
                   open →
                 </span>
               </button>
@@ -297,7 +297,7 @@ function PurseSheet({
   return (
     <Sheet title="badge purse" onClose={onClose}>
       {badges.length === 0 ? (
-        <div className="px-4 py-8 text-center font-mono text-[12px] text-muted">
+        <div className="px-4 py-8 text-center text-[13px] text-muted">
           no badges yet. claim one to start posting.
         </div>
       ) : (
@@ -310,20 +310,20 @@ function PurseSheet({
                 <button
                   onClick={() => onSwitch(b.badgeId)}
                   className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
-                    isActive ? "bg-acid-soft" : "hover:bg-bg-3"
+                    isActive ? "bg-bg-2" : "hover:bg-bg-2"
                   }`}
                 >
                   <HoloSeal hash={b.anonId ?? b.kind} size={32} animate={isActive} />
                   <div className="flex-1 min-w-0 leading-tight">
-                    <div className={`font-mono text-[14px] ${isActive ? "text-acid" : "text-text"}`}>
+                    <div className={`font-numeric text-[14px] ${isActive ? "font-medium text-acid" : "text-text"}`}>
                       ${meta?.symbol ?? b.kind}
                     </div>
-                    <div className="truncate font-mono text-[10px] text-muted-2">
+                    <div className="truncate font-numeric text-[10px] text-muted-2">
                       {b.anonId ?? b.kind}
                     </div>
                   </div>
                   {isActive && (
-                    <span className="rounded border border-acid-line bg-acid-soft px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-acid">
+                    <span className="rounded-full bg-bg-3 px-2 py-0.5 text-[10px] font-medium text-acid">
                       active
                     </span>
                   )}

@@ -8,17 +8,16 @@ import { api } from "@/lib/api";
 import { getConnection } from "@/lib/solana";
 import { useBadge } from "./badge-context";
 import { ClaimDialog } from "./claim-dialog";
-import { HoloSeal } from "./holo-seal";
 import { tokenFor } from "@/lib/tokens";
 
 type Stage = "idle" | "preparing" | "signing" | "confirming" | "finalizing";
 
 const stageCopy: Record<Stage, string> = {
-  idle: "post it",
-  preparing: "preparing…",
-  signing: "approve in wallet…",
-  confirming: "confirming…",
-  finalizing: "posting…",
+  idle: "Post",
+  preparing: "Preparing…",
+  signing: "Approve in wallet…",
+  confirming: "Confirming…",
+  finalizing: "Posting…",
 };
 
 export function PostComposer({
@@ -60,14 +59,14 @@ export function PostComposer({
       <>
         {claimDialog}
         <CallToAction
-          title="claim a badge to start posting"
+          title="Claim a badge to start posting"
           body={
             <>
-              pick a community whose token you actually hold. we check on-chain, then hand you an
+              Pick a community whose token you actually hold. We check on-chain, then hand you an
               anonymous identity tied to that bag — never to your wallet.
             </>
           }
-          actionLabel={requiredKind ? `claim $${symbol}` : "pick a badge"}
+          actionLabel={requiredKind ? `Claim $${symbol}` : "Pick a badge"}
           onAction={() => setClaiming(target)}
         />
       </>
@@ -82,15 +81,15 @@ export function PostComposer({
       <>
         {claimDialog}
         <CallToAction
-          title={`you don’t hold $${symbol}`}
+          title={`You don’t hold $${symbol}`}
           body={
             <>
-              this community is for verified <span className="font-display text-lg text-ink">${symbol}</span>{" "}
-              holders. claim a $<span>{symbol}</span> badge to post here, or browse the rest of the feed under one
+              This community is for verified <span className="font-semibold text-text">${symbol}</span>{" "}
+              holders. Claim a $<span>{symbol}</span> badge to post here, or browse the rest of the feed under one
               of your existing badges.
             </>
           }
-          actionLabel={`claim $${symbol}`}
+          actionLabel={`Claim $${symbol}`}
           onAction={() => setClaiming(requiredKind)}
         />
       </>
@@ -103,9 +102,9 @@ export function PostComposer({
       <>
         {claimDialog}
         <CallToAction
-          title="pick a badge to post under"
-          body="you have badges in your purse — switch to one in the header dropdown."
-          actionLabel="claim another"
+          title="Pick a badge to post under"
+          body="You have badges in your purse — switch to one in the header dropdown."
+          actionLabel="Claim another"
           onAction={() => setClaiming(requiredKind ?? "jup_holder")}
         />
       </>
@@ -115,8 +114,8 @@ export function PostComposer({
     return (
       <>
         {claimDialog}
-        <Notice title="connect your wallet to post">
-          your wallet stays in the enclave — only the badge gets attached to what you say.
+        <Notice title="Connect your wallet to post">
+          Your wallet stays in the enclave — only the badge gets attached to what you say.
         </Notice>
       </>
     );
@@ -186,67 +185,64 @@ export function PostComposer({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex w-full items-center gap-3 rounded-md border border-line bg-bg-2 px-4 py-3 text-left transition hover:border-line-2"
+        className="flex w-full items-center gap-3 rounded-lg border border-line bg-bg px-3 py-2 text-left transition hover:border-line-2"
       >
-        <HoloSeal hash={badge.anonId ?? badge.kind} size={26} />
-        <span className="flex-1 truncate font-mono text-[13px] text-text-2">
-          start a thread as <span className="text-text">${meta?.symbol ?? badge.kind}</span>…
+        <span className="flex-1 truncate text-[13px] text-muted">
+          Post to <span className="font-medium text-text-2">${meta?.symbol ?? badge.kind}</span>…
         </span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
-          new thread
+        <span className="scribble-btn scribble-btn--primary pointer-events-none px-2.5 py-1 text-[12px]">
+          New post
         </span>
       </button>
     );
   }
 
   return (
-    <div className="rounded-md border border-line bg-bg-2 p-4">
-      <div className="mb-3 flex items-center gap-2 border-b border-line pb-3">
-        <HoloSeal hash={badge.anonId ?? badge.kind} size={26} />
-        <div className="flex flex-col leading-tight">
-          <span className="font-mono text-[12px] text-text">${meta?.symbol ?? badge.kind}</span>
-          <span className="font-mono text-[10px] text-muted-2">verified holder · wallet sealed</span>
-        </div>
+    <div className="rounded-lg border border-line bg-bg p-3.5">
+      <div className="mb-2 flex flex-wrap items-center gap-x-1.5 border-b border-line pb-2 text-[12px] text-muted">
+        Posting to <span className="font-medium text-text">${meta?.symbol ?? badge.kind}</span>
+        <span className="text-muted-2">·</span>
+        <span>verified holder, wallet sealed</span>
       </div>
 
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="title · what's the thread about?"
+        placeholder="Title"
         disabled={busy}
         maxLength={160}
-        className="w-full border-0 bg-transparent py-1 font-mono text-[16px] font-medium text-text placeholder:text-muted-2 focus:outline-none disabled:opacity-50"
+        className="w-full border-0 bg-transparent py-1 text-[18px] font-semibold text-text placeholder:text-muted-2 focus:outline-none disabled:opacity-50"
       />
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
         rows={5}
-        placeholder="body · be specific. holders pay attention."
+        placeholder="Write your post… be specific, holders pay attention."
         disabled={busy}
         maxLength={2000}
-        className="mt-1 w-full resize-none border-0 bg-transparent font-mono text-[13px] leading-relaxed text-text-2 placeholder:text-muted-2 focus:outline-none disabled:opacity-50"
+        className="mt-1 w-full resize-none border-0 bg-transparent text-[14px] leading-relaxed text-text-2 placeholder:text-muted-2 focus:outline-none disabled:opacity-50"
       />
 
       {err && (
-        <div className="mt-2 rounded border border-danger/40 bg-danger/10 px-3 py-2 font-mono text-[12px] text-danger">
-          oops — {err}
+        <div className="mt-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-[13px] text-danger">
+          Error: {err}
         </div>
       )}
 
       <div className="mt-3 flex items-center gap-3 border-t border-line pt-3">
         <span
-          className={`font-mono text-[10px] uppercase tracking-[0.06em] tabular-nums ${
-            remainingTitle < 0 ? "text-danger" : "text-muted"
+          className={`font-numeric text-[12px] ${
+            remainingTitle < 0 ? "text-danger" : "text-muted-2"
           }`}
         >
-          title {remainingTitle}
+          {remainingTitle}
         </span>
         <span
-          className={`font-mono text-[10px] uppercase tracking-[0.06em] tabular-nums ${
-            remainingBody < 0 ? "text-danger" : "text-muted"
+          className={`font-numeric text-[12px] ${
+            remainingBody < 0 ? "text-danger" : "text-muted-2"
           }`}
         >
-          body {remainingBody}
+          {remainingBody}
         </span>
         <button
           onClick={() => {
@@ -275,9 +271,9 @@ export function PostComposer({
 
 function Notice({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-line bg-bg-2 p-4">
-      <div className="font-mono text-[14px] font-medium text-text">{title}</div>
-      <div className="mt-1.5 font-mono text-[12px] leading-relaxed text-text-2">{children}</div>
+    <div className="rounded-xl border border-line bg-bg p-4 shadow-sm">
+      <div className="text-[15px] font-semibold text-text">{title}</div>
+      <div className="mt-1.5 text-[13px] leading-relaxed text-muted">{children}</div>
     </div>
   );
 }
@@ -294,10 +290,10 @@ function CallToAction({
   onAction: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-line bg-bg-2 p-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-3 rounded-xl border border-line bg-bg p-4 shadow-sm sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
-        <div className="font-mono text-[14px] font-medium text-text">{title}</div>
-        <div className="mt-1.5 font-mono text-[12px] leading-relaxed text-text-2">{body}</div>
+        <div className="text-[15px] font-semibold text-text">{title}</div>
+        <div className="mt-1.5 text-[13px] leading-relaxed text-muted">{body}</div>
       </div>
       <button onClick={onAction} className="scribble-btn scribble-btn--primary whitespace-nowrap">
         {actionLabel}

@@ -3,53 +3,52 @@
 @tailwind utilities;
 
 :root {
-  /* Dark terminal aesthetic — acid green accent on near-black */
-  --bg: #0a0b08;
-  --bg-2: #111310;
-  --bg-3: #181a15;
-  --bg-4: #20231d;
+  /* Clean light forum — neutral grays with one refined forest-green accent.
+     Light is the default; the dark variant lives under [data-theme="dark"]. */
+  --bg: #ffffff;
+  --bg-2: #f7f8f8;
+  --bg-3: #f0f1f2;
+  --bg-4: #e7e9eb;
 
-  /* Aliases used heavily in legacy class names. Keep them mapped to the
-     dark surfaces so existing className references render correctly without
-     touching every file. */
-  --paper: #0a0b08;
-  --surface: #111310;
-  --surface-2: #181a15;
-  --surface-3: #20231d;
+  /* Legacy aliases kept mapped so existing class references still resolve. */
+  --paper: #ffffff;
+  --surface: #f7f8f8;
+  --surface-2: #f0f1f2;
+  --surface-3: #e7e9eb;
 
-  --line: #2a2d25;
-  --line-2: #383c33;
+  --line: #e6e8ea;
+  --line-2: #d4d7da;
 
-  /* "ink" used to be black; on dark bg it's the light foreground */
-  --ink: #e8e8e0;
-  --ink-soft: rgba(232, 232, 224, 0.72);
-  --ink-faded: rgba(232, 232, 224, 0.45);
+  --ink: #17191c;
+  --ink-soft: rgba(23, 25, 28, 0.72);
+  --ink-faded: rgba(23, 25, 28, 0.45);
 
-  --border: #2a2d25;
-  --border-soft: rgba(232, 232, 224, 0.18);
+  --border: #e6e8ea;
+  --border-soft: rgba(23, 25, 28, 0.08);
 
-  --text: #e8e8e0;
-  --text-2: #b8b9ad;
-  --muted: #7a7d70;
-  --muted-2: #5a5d52;
-  --fg-3: #5a5d52;
+  --text: #17191c;
+  --text-2: #4a4f57;
+  --muted: #6b7280;
+  --muted-2: #9aa1ab;
+  --fg-3: #9aa1ab;
 
-  /* Acid-green signal — the only saturated color in the palette */
-  --acid: #c4ff3d;
-  --acid-d: #a4dd1d;
-  --acid-soft: rgba(196, 255, 61, 0.12);
-  --acid-line: rgba(196, 255, 61, 0.32);
+  /* Refined forest-green accent — the single saturated color. Routed through
+     the legacy --acid* names so every text-acid / scribble-btn--primary
+     reference becomes the new accent with no per-component edits. */
+  --acid: #3d7a16;
+  --acid-d: #35690f;
+  --acid-soft: rgba(61, 122, 22, 0.1);
+  --acid-line: rgba(61, 122, 22, 0.28);
 
-  /* Status */
-  --warn: #ffb13d;
-  --danger: #ff5a4d;
+  --warn: #b8650a;
+  --danger: #c5392c;
 
-  /* Legacy palette aliases — remap to the new system so components that
-     still reference these tokens read naturally on dark. */
+  /* Legacy crayon-* aliases — remapped onto the new system. crayon-yellow is
+     the soft accent tint (not solid) so "active" tiles stay quiet. */
   --crayon-blue: var(--acid);
   --crayon-red: var(--danger);
   --crayon-green: var(--acid);
-  --crayon-yellow: var(--acid);
+  --crayon-yellow: var(--acid-soft);
   --crayon-purple: var(--acid);
   --crayon-pink: var(--acid);
   --crayon-orange: var(--warn);
@@ -58,65 +57,72 @@
   --accent: var(--acid);
   --accent-2: var(--acid-d);
   --accent-soft: var(--acid-soft);
-
+  --accent-line: var(--acid-line);
   --success: var(--acid);
   --warning: var(--warn);
 
-  /* No more pen shadow on dark — kept as no-ops so components don't lose
-     spacing when the value is referenced in a box-shadow shorthand. */
+  /* Pen shadows neutralized to no-ops so box-shadow shorthands keep spacing. */
   --pen-shadow: 0 0 0 transparent;
   --pen-shadow-sm: 0 0 0 transparent;
   --pen-shadow-lg: 0 0 0 transparent;
 
+  /* Real, subtle elevation for cards / header / dropdowns. */
+  --shadow-sm: 0 1px 2px rgba(17, 19, 22, 0.06);
+  --shadow-md: 0 2px 8px rgba(17, 19, 22, 0.08);
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+
   --header-h: 60px;
   --header-h-sm: 56px;
-  --sidebar-w: 240px;
+  --sidebar-w: 232px;
 
-  /* Theme-aware translucent surface — used by sticky header + bottom tab
-     bar so they blur the content below in their own theme's color, not
-     a hardcoded dark. Light theme overrides this below. */
-  --surface-translucent: rgba(10, 11, 8, 0.85);
-  --tab-bar-translucent: rgba(17, 19, 16, 0.92);
+  --surface-translucent: rgba(255, 255, 255, 0.85);
+  --tab-bar-translucent: rgba(255, 255, 255, 0.92);
 }
 
-/* ─── light theme override (paper / zine) ─── */
-:root[data-theme="light"] {
-  --bg: #f4f1ea;
-  --bg-2: #ece8de;
-  --bg-3: #e3dfd2;
-  --bg-4: #d8d3c4;
-  --paper: #f4f1ea;
-  --surface: #ece8de;
-  --surface-2: #e3dfd2;
-  --surface-3: #d8d3c4;
+/* ─── dark theme override ─── */
+:root[data-theme="dark"] {
+  --bg: #0e0f11;
+  --bg-2: #15171a;
+  --bg-3: #1c1f23;
+  --bg-4: #24272c;
+  --paper: #0e0f11;
+  --surface: #15171a;
+  --surface-2: #1c1f23;
+  --surface-3: #24272c;
 
-  --line: #d4cfbe;
-  --line-2: #b8b29e;
+  --line: #24272c;
+  --line-2: #32363c;
 
-  --ink: #1a1a14;
-  --ink-soft: rgba(26, 26, 20, 0.72);
-  --ink-faded: rgba(26, 26, 20, 0.45);
+  --ink: #e8eaed;
+  --ink-soft: rgba(232, 234, 237, 0.72);
+  --ink-faded: rgba(232, 234, 237, 0.45);
 
-  --border: #d4cfbe;
-  --border-soft: rgba(26, 26, 20, 0.18);
+  --border: #24272c;
+  --border-soft: rgba(232, 234, 237, 0.1);
 
-  --text: #1a1a14;
-  --text-2: #3a3a30;
-  --muted: #6a6a5a;
-  --muted-2: #8a8a78;
-  --fg-3: #8a8a78;
+  --text: #e8eaed;
+  --text-2: #a8aeb8;
+  --muted: #7c828c;
+  --muted-2: #565b63;
+  --fg-3: #565b63;
 
-  /* darker acid for legibility on cream */
-  --acid: #4a7a10;
-  --acid-d: #3a6510;
-  --acid-soft: rgba(74, 122, 16, 0.12);
-  --acid-line: rgba(74, 122, 16, 0.35);
+  --acid: #9ed649;
+  --acid-d: #a8de54;
+  --acid-soft: rgba(158, 214, 73, 0.14);
+  --acid-line: rgba(158, 214, 73, 0.3);
 
-  --warn: #b8650a;
-  --danger: #c5392c;
+  --warn: #ffb13d;
+  --danger: #ff6b5e;
+  --crayon-yellow: var(--acid-soft);
 
-  --surface-translucent: rgba(244, 241, 234, 0.85);
-  --tab-bar-translucent: rgba(236, 232, 222, 0.94);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  --surface-translucent: rgba(14, 15, 17, 0.85);
+  --tab-bar-translucent: rgba(14, 15, 17, 0.92);
 }
 
 * {
@@ -127,9 +133,9 @@ html,
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
-  line-height: 1.55;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
   letter-spacing: 0;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -141,23 +147,35 @@ body {
 }
 
 ::selection {
-  background: var(--acid);
-  color: var(--bg);
+  background: rgba(61, 122, 22, 0.18);
+  color: inherit;
+}
+:root[data-theme="dark"] ::selection {
+  background: rgba(158, 214, 73, 0.22);
+  color: inherit;
+}
+
+/* Keyboard focus ring — visible only for keyboard users, never on mouse. */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--acid);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--line-2);
-  border-radius: 4px;
+  border: 2px solid var(--bg);
+  border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--muted);
+  background: var(--muted-2);
 }
 
 button {
@@ -174,70 +192,77 @@ textarea {
   color: var(--text);
 }
 
-/* Type tokens — all monospace by default, with a sans-fallback class */
+/* Type tokens — sans everywhere by default. font-numeric / font-mono-real keep
+   a real monospace for hashes, anon ids, wallet strings, and vote counts. */
 .font-display {
-  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
-  font-weight: 500;
+  font-family: var(--font-sans), -apple-system, system-ui, sans-serif;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 .font-body {
-  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-sans), -apple-system, system-ui, sans-serif;
 }
 .font-mono {
-  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-sans), -apple-system, system-ui, sans-serif;
 }
 .font-scribble {
-  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-sans), -apple-system, system-ui, sans-serif;
 }
 .font-sans-grotesk {
-  font-family: var(--font-sans), "Space Grotesk", -apple-system, system-ui, sans-serif;
+  font-family: var(--font-sans), -apple-system, system-ui, sans-serif;
+}
+.font-numeric,
+.font-mono-real {
+  font-family: var(--font-mono-real), "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-feature-settings: "tnum" 1;
 }
 
 /* ─── cards ─── */
 .scribble-card {
-  background: var(--bg-2);
+  background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: none;
-  transition: border-color 120ms ease;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 .scribble-card:hover {
   border-color: var(--line-2);
 }
 
 .scribble-card-flat {
-  background: var(--bg-2);
+  background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
 }
 
 /* ─── buttons ─── */
 .scribble-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  background: transparent;
+  background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line-2);
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 7px 14px;
-  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-sans), system-ui, sans-serif;
   font-weight: 500;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 13px;
+  line-height: 1.2;
   box-shadow: none;
-  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+  transition: border-color var(--dur-fast) ease, color var(--dur-fast) ease, background var(--dur-fast) ease;
 }
 .scribble-btn:hover:not(:disabled) {
-  border-color: var(--acid);
-  color: var(--acid);
+  border-color: var(--line-2);
+  background: var(--bg-2);
+  color: var(--text);
 }
 .scribble-btn:active:not(:disabled) {
   background: var(--bg-3);
 }
 .scribble-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
 }
 
 .scribble-btn--primary {
@@ -265,21 +290,22 @@ textarea {
 .scribble-btn--red {
   background: transparent;
   color: var(--danger);
-  border-color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 .scribble-btn--red:hover:not(:disabled) {
   background: var(--danger);
-  color: var(--bg);
+  color: #fff;
   border-color: var(--danger);
 }
 .scribble-btn--ghost {
   background: transparent;
   border: 1px solid transparent;
   box-shadow: none;
+  color: var(--text-2);
 }
 .scribble-btn--ghost:hover:not(:disabled) {
-  border-color: var(--line-2);
-  background: transparent;
+  border-color: transparent;
+  background: var(--bg-3);
   color: var(--text);
 }
 
@@ -288,21 +314,21 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg-3);
+  background: var(--bg-2);
   border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 3px 8px;
-  font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-family: var(--font-sans), system-ui, sans-serif;
   font-weight: 500;
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 12px;
   color: var(--text-2);
   box-shadow: none;
   white-space: nowrap;
-  transition: border-color 120ms ease, color 120ms ease;
+  transition: border-color var(--dur-fast) ease, color var(--dur-fast) ease, background var(--dur-fast) ease;
 }
 .scribble-chip:hover:not(:disabled) {
   border-color: var(--line-2);
+  background: var(--bg-3);
   color: var(--text);
 }
 .scribble-chip--active {
@@ -311,14 +337,14 @@ textarea {
   color: var(--acid);
 }
 
-/* ─── highlighter (acid-soft swipe behind text) ─── */
+/* ─── highlighter (soft accent tint behind emphasized text) ─── */
 .highlighter {
-  background-image: linear-gradient(180deg, transparent 50%, var(--acid-soft) 50%);
+  background-image: linear-gradient(180deg, transparent 55%, var(--acid-soft) 55%);
   padding: 0 0.18em;
   color: var(--acid);
 }
 
-/* ─── scribble-underline → thin acid underline ─── */
+/* ─── thin accent underline ─── */
 .scribble-underline {
   position: relative;
   display: inline-block;
@@ -329,26 +355,26 @@ textarea {
   left: 0;
   right: 0;
   bottom: -3px;
-  height: 1px;
+  height: 2px;
+  border-radius: 2px;
   background: var(--acid);
   pointer-events: none;
 }
 
-/* ─── layout grid (desktop: left rail / main / right rail) ─── */
+/* ─── layout grid (slim left nav / main feed) ─── */
 .app-layout {
   display: grid;
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
-  max-width: 1280px;
+  max-width: 1080px;
   margin: 0 auto;
-  gap: 22px;
-  padding: 22px 22px 60px;
-  align-items: flex-start;
+  gap: 28px;
+  padding: 24px 24px 80px;
+  align-items: start;
 }
-@media (min-width: 1024px) {
-  /* 3-column grid kicks in once we have room for the right rail */
+@media (min-width: 1280px) {
   .app-layout {
-    grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 280px;
-    max-width: 1480px;
+    max-width: 1120px;
+    gap: 36px;
   }
 }
 .app-sidebar {
@@ -392,8 +418,6 @@ textarea {
   padding: 6px 6px max(10px, env(safe-area-inset-bottom));
 }
 
-/* Reserve space at the bottom of every page on mobile so the fixed tab
-   bar doesn't cover content. ~70px = bar height + safe-area + breathing room. */
 @media (max-width: 767px) {
   body {
     padding-bottom: 72px;
@@ -405,9 +429,9 @@ textarea {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(17, 19, 22, 0.35);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   animation: backdrop-fade 0.18s ease both;
 }
 .drawer-panel {
@@ -417,8 +441,9 @@ textarea {
   left: 0;
   bottom: 0;
   width: min(280px, 84vw);
-  background: var(--bg-2);
+  background: var(--bg);
   border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-md);
   overflow-y: auto;
   padding: 16px 14px 24px;
   animation: drawer-slide 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -445,21 +470,21 @@ textarea {
 /* ─── thread rows ─── */
 .thread-row {
   display: grid;
-  grid-template-columns: 56px 1fr;
+  grid-template-columns: 40px 1fr;
   gap: 14px;
-  padding: 16px 18px;
+  padding: 14px 16px;
   border-bottom: 1px solid var(--line);
-  transition: background 120ms ease;
+  transition: background var(--dur-fast) ease;
 }
 .thread-row:last-child {
   border-bottom: none;
 }
 .thread-row:hover {
-  background: var(--bg-3);
+  background: var(--bg-2);
 }
 @media (max-width: 639px) {
   .thread-row {
-    grid-template-columns: 40px 1fr;
+    grid-template-columns: 36px 1fr;
     gap: 10px;
     padding: 12px 12px;
   }
@@ -474,7 +499,9 @@ textarea {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
   height: var(--header-h);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 @media (max-width: 767px) {
   .scribble-header {
@@ -486,7 +513,7 @@ textarea {
   }
 }
 
-/* ─── tape-card no longer used; neutralize ─── */
+/* ─── tape-card neutralized ─── */
 .tape-card {
   position: relative;
   transform: none;
@@ -512,20 +539,6 @@ textarea {
   50% { opacity: 1; }
 }
 
-/* Blinking terminal cursor */
-@keyframes bs-blink {
-  0%, 49% { opacity: 1; }
-  50%, 100% { opacity: 0; }
-}
-.bs-cursor {
-  display: inline-block;
-  width: 8px;
-  height: 1em;
-  background: var(--acid);
-  vertical-align: text-bottom;
-  animation: bs-blink 1s step-end infinite;
-}
-
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -545,29 +558,29 @@ textarea {
 /* ─── inputs ─── */
 @layer components {
   .scribble-input {
-    background: var(--bg-3);
+    background: var(--bg);
     border: 1px solid var(--line);
-    border-radius: 4px;
+    border-radius: 8px;
     padding-top: 9px;
     padding-right: 12px;
     padding-bottom: 9px;
     padding-left: 12px;
-    font-family: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
-    font-size: 13px;
+    font-family: var(--font-sans), system-ui, sans-serif;
+    font-size: 14px;
     color: var(--text);
     outline: none;
-    transition: border-color 120ms ease, background 120ms ease;
+    transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
   }
   .scribble-input:focus {
     border-color: var(--acid-line);
-    background: var(--bg-2);
+    box-shadow: 0 0 0 3px var(--acid-soft);
   }
   .scribble-input::placeholder {
     color: var(--muted-2);
   }
 }
 
-/* Acid color utilities for inline use */
+/* Accent color utilities for inline use */
 .text-acid { color: var(--acid); }
 .bg-acid { background: var(--acid); }
 .border-acid { border-color: var(--acid); }

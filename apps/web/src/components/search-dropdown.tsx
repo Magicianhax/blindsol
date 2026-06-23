@@ -129,7 +129,7 @@ export function SearchDropdown() {
         onKeyDown={onKeyDown}
         placeholder="search threads, $TICKER, @handle"
         className="scribble-input w-full"
-        style={{ paddingLeft: 36, fontSize: 12 }}
+        style={{ paddingLeft: 36 }}
         aria-haspopup="listbox"
         aria-expanded={showDropdown}
       />
@@ -137,10 +137,10 @@ export function SearchDropdown() {
       {showDropdown && (
         <div
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-[420px] overflow-y-auto rounded-md border border-line bg-bg-2 shadow-2xl"
+          className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-[420px] overflow-y-auto rounded-lg border border-line bg-bg shadow-md"
         >
           {flatItems.length === 0 ? (
-            <div className="px-4 py-6 text-center font-mono text-[12px] text-muted">
+            <div className="px-4 py-6 text-center text-[13px] text-muted">
               {query.trim()
                 ? loadingPosts
                   ? "searching…"
@@ -150,7 +150,7 @@ export function SearchDropdown() {
           ) : (
             groups.map((group) => (
               <section key={group.label} className="border-b border-line last:border-b-0">
-                <header className="px-3 pt-2 pb-1 font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
+                <header className="px-3 pt-2 pb-1 text-[11px] font-medium text-muted">
                   {group.label}
                 </header>
                 <ul>
@@ -167,7 +167,7 @@ export function SearchDropdown() {
                           }}
                           onMouseEnter={() => setHighlight(idx)}
                           className={`flex items-center gap-2.5 px-3 py-2 transition ${
-                            active ? "bg-bg-3 text-acid" : "text-text-2 hover:bg-bg-3 hover:text-text"
+                            active ? "bg-bg-2 text-text" : "text-text-2 hover:bg-bg-2 hover:text-text"
                           }`}
                         >
                           <ResultRow item={item} active={active} />
@@ -191,12 +191,12 @@ function ResultRow({ item, active }: { item: ResultItem; active: boolean }) {
       <>
         <TokenIcon kind={item.tokenKind} size={20} />
         <div className="min-w-0 flex-1 leading-tight">
-          <div className={`font-mono text-[13px] ${active ? "text-acid" : "text-text"}`}>
+          <div className={`font-numeric text-[13px] ${active ? "text-acid" : "text-text"}`}>
             ${item.ticker}
           </div>
-          <div className="truncate font-mono text-[10px] text-muted">{item.name}</div>
+          <div className="truncate text-[11px] text-muted">{item.name}</div>
         </div>
-        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-2">token</span>
+        <span className="text-[11px] text-muted-2">token</span>
       </>
     );
   }
@@ -206,12 +206,12 @@ function ResultRow({ item, active }: { item: ResultItem; active: boolean }) {
       <>
         <TokenIcon kind={item.badgeKind} size={20} />
         <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate font-mono text-[13px]">{item.title}</div>
-          <div className="font-mono text-[10px] text-muted">
+          <div className="truncate text-[13px]">{item.title}</div>
+          <div className="font-numeric text-[10px] text-muted">
             ${meta?.symbol ?? item.badgeKind} · {item.authorAnonId.slice(0, 12)}…
           </div>
         </div>
-        <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-2">thread</span>
+        <span className="text-[11px] text-muted-2">thread</span>
       </>
     );
   }
@@ -221,12 +221,12 @@ function ResultRow({ item, active }: { item: ResultItem; active: boolean }) {
         <UserIcon />
       </span>
       <div className="min-w-0 flex-1 leading-tight">
-        <div className={`font-mono text-[13px] ${active ? "text-acid" : "text-text"}`}>
+        <div className={`font-numeric text-[13px] ${active ? "text-acid" : "text-text"}`}>
           @{item.handle}
         </div>
-        <div className="font-mono text-[10px] text-muted">open profile</div>
+        <div className="text-[11px] text-muted">open profile</div>
       </div>
-      <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-2">handle</span>
+      <span className="text-[11px] text-muted-2">handle</span>
     </>
   );
 }

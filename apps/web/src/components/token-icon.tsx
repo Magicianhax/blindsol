@@ -34,7 +34,7 @@ export function TokenIcon({ kind, size = 28, className = "" }: TokenIconProps) {
   if (errored) {
     return (
       <span
-        className={`inline-flex shrink-0 items-center justify-center rounded-full font-display font-bold ${className}`}
+        className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold ${className}`}
         style={{
           width: size,
           height: size,
@@ -63,7 +63,7 @@ export function TokenIcon({ kind, size = 28, className = "" }: TokenIconProps) {
       style={{
         width: size,
         height: size,
-        boxShadow: `0 0 0 1px ${meta.color}30`,
+        boxShadow: "0 0 0 1px var(--line)",
       }}
     />
   );

@@ -55,20 +55,20 @@ export function BadgeSwitcher({ onClaimMore }: BadgeSwitcherProps) {
         <TokenIcon kind={active.kind} size={18} />
         <span>${activeSymbol}</span>
         {badges.length > 1 && (
-          <span className="ml-0.5 rounded-full bg-acid px-1.5 py-0.5 font-mono text-[10px] leading-none text-bg">
+          <span className="ml-0.5 rounded-full bg-acid px-1.5 py-0.5 font-numeric text-[10px] leading-none text-bg">
             {badges.length}
           </span>
         )}
-        <span className="text-muted">⌄</span>
+        <ChevronIcon />
       </button>
 
       {open && (
         <div
           role="menu"
-          className="scribble-card wobble-in absolute right-0 top-full z-40 mt-2 w-[min(280px,calc(100vw-24px))] p-2 text-left"
+          className="absolute right-0 top-full z-40 mt-2 w-[min(280px,calc(100vw-24px))] rounded-xl border border-line bg-bg p-2 text-left shadow-md"
         >
-          <div className="px-2 pb-1.5 font-display text-sm uppercase tracking-wider text-muted">
-            your badge purse ({badges.length})
+          <div className="px-2 pb-1.5 text-sm font-semibold text-muted">
+            Your badge purse ({badges.length})
           </div>
           <ul className="flex flex-col gap-1">
             {badges.map((b) => {
@@ -78,10 +78,10 @@ export function BadgeSwitcher({ onClaimMore }: BadgeSwitcherProps) {
               return (
                 <li key={b.badgeId}>
                   <div
-                    className={`flex items-center gap-2 rounded-lg border-2 p-1.5 transition ${
+                    className={`flex items-center gap-2 rounded-lg border p-1.5 transition ${
                       isActive
-                        ? "border-ink bg-crayon-yellow shadow-pen-sm"
-                        : "border-dashed border-transparent hover:border-ink hover:bg-surface-2"
+                        ? "border-acid-line bg-acid-soft"
+                        : "border-transparent hover:bg-bg-2"
                     }`}
                   >
                     <button
@@ -93,16 +93,16 @@ export function BadgeSwitcher({ onClaimMore }: BadgeSwitcherProps) {
                     >
                       <TokenIcon kind={b.kind} size={26} />
                       <div className="min-w-0 flex-1">
-                        <div className="font-display text-base leading-none text-ink">${symbol}</div>
+                        <div className="text-base font-semibold leading-none text-text">${symbol}</div>
                         <div className="text-[10px] text-muted">
-                          {isActive ? "posting as this" : "tap to switch"}
+                          {isActive ? "Posting as this" : "Tap to switch"}
                         </div>
                       </div>
                     </button>
                     <button
                       onClick={() => removeBadge(b.badgeId)}
-                      title="remove badge"
-                      className="rounded-full p-1 text-muted transition hover:bg-paper hover:text-crayon-red"
+                      title="Remove badge"
+                      className="rounded-full p-1 text-muted transition hover:bg-bg-3 hover:text-danger"
                     >
                       <CloseIcon />
                     </button>
@@ -115,9 +115,9 @@ export function BadgeSwitcher({ onClaimMore }: BadgeSwitcherProps) {
             <Link
               href={`/u/${active.anonId}`}
               onClick={() => setOpen(false)}
-              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-ink px-3 py-1.5 font-display text-base text-ink transition hover:bg-crayon-yellow"
+              className="scribble-btn mt-2 w-full"
             >
-              view profile →
+              View profile →
             </Link>
           ) : null}
           <button
@@ -125,23 +125,31 @@ export function BadgeSwitcher({ onClaimMore }: BadgeSwitcherProps) {
               setOpen(false);
               setUsernameOpen(true);
             }}
-            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-ink px-3 py-1.5 font-display text-base text-ink transition hover:bg-crayon-yellow"
+            className="scribble-btn mt-1.5 w-full"
           >
-            pick a handle
+            Pick a handle
           </button>
           <button
             onClick={() => {
               setOpen(false);
               onClaimMore();
             }}
-            className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-ink px-3 py-1.5 font-display text-base text-ink transition hover:bg-crayon-yellow"
+            className="scribble-btn mt-1.5 w-full"
           >
-            + claim another badge
+            + Claim another badge
           </button>
         </div>
       )}
       {usernameOpen && <UsernameDialog onClose={() => setUsernameOpen(false)} />}
     </div>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3 w-3 text-muted" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M4 6 L8 10 L12 6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

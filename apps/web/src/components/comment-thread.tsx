@@ -33,7 +33,7 @@ export function CommentThread({ postId, comments, onCommentPosted }: Props) {
 
   async function submit() {
     if (!badge) {
-      setErr("claim a badge to reply");
+      setErr("Claim a badge to reply");
       return;
     }
     if (!text.trim()) return;
@@ -62,15 +62,15 @@ export function CommentThread({ postId, comments, onCommentPosted }: Props) {
       {badge ? (
         <div className="scribble-card p-4">
           {replyTo && (
-            <div className="mb-2 flex items-center justify-between font-mono text-[11px] text-muted">
+            <div className="mb-2 flex items-center justify-between text-[12px] text-muted">
               <span>
-                ↳ replying to <span className="text-text">{replyTo.slice(0, 8)}</span>
+                Replying to <span className="font-numeric text-text-2">{replyTo.slice(0, 8)}</span>
               </span>
               <button
                 onClick={() => setReplyTo(null)}
-                className="font-mono text-[11px] uppercase tracking-[0.06em] hover:text-acid"
+                className="text-[12px] transition hover:text-acid"
               >
-                cancel
+                Cancel
               </button>
             </div>
           )}
@@ -82,12 +82,12 @@ export function CommentThread({ postId, comments, onCommentPosted }: Props) {
                 onChange={(e) => setText(e.target.value)}
                 rows={3}
                 maxLength={2000}
-                placeholder={`reply as $${symbol}…`}
-                className="w-full resize-none border-0 bg-transparent font-mono text-[13px] leading-relaxed text-text placeholder:text-muted-2 focus:outline-none"
+                placeholder={`Reply as $${symbol}…`}
+                className="w-full resize-none border-0 bg-transparent text-[13px] leading-relaxed text-text placeholder:text-muted-2 focus:outline-none"
               />
               {err && (
-                <div className="mt-2 rounded border border-danger/40 bg-danger/10 px-3 py-1.5 font-mono text-[11px] text-danger">
-                  oops — {err}
+                <div className="mt-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-1.5 text-[12px] text-danger">
+                  {err}
                 </div>
               )}
               <div className="mt-2 flex items-center justify-end border-t border-line pt-2">
@@ -97,7 +97,7 @@ export function CommentThread({ postId, comments, onCommentPosted }: Props) {
                   className="scribble-btn scribble-btn--primary"
                 >
                   {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-bg/40 border-t-bg" />}
-                  {busy ? "posting…" : "reply"}
+                  {busy ? "Posting…" : "Reply"}
                 </button>
               </div>
             </div>
@@ -106,27 +106,28 @@ export function CommentThread({ postId, comments, onCommentPosted }: Props) {
       ) : (
         <div className="scribble-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
-            <div className="font-mono text-[14px] text-text">join the conversation</div>
-            <p className="mt-1 font-mono text-[12px] leading-relaxed text-text-2">
-              claim a badge for any token you hold and reply anonymously.
+            <div className="text-[14px] font-medium text-text">Join the conversation</div>
+            <p className="mt-1 text-[12px] leading-relaxed text-text-2">
+              Claim a badge for any token you hold and reply anonymously.
             </p>
           </div>
           <button
             onClick={() => setClaiming(true)}
-            className="scribble-btn scribble-btn--yellow whitespace-nowrap"
+            className="scribble-btn scribble-btn--primary whitespace-nowrap"
           >
-            claim a badge
+            Claim a badge
           </button>
         </div>
       )}
 
       <div>
-        <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
-          {comments.length} {comments.length === 1 ? "reply" : "replies"} · sorted by score
+        <h2 className="mb-3 text-[13px] text-muted">
+          <span className="font-numeric text-text-2">{comments.length}</span>{" "}
+          {comments.length === 1 ? "reply" : "replies"} · sorted by score
         </h2>
         {top.length === 0 ? (
-          <div className="scribble-card-flat px-4 py-8 text-center font-mono text-[13px] text-muted">
-            no replies yet. be the brave one.
+          <div className="scribble-card-flat px-4 py-8 text-center text-[13px] text-muted">
+            No replies yet. Be the first.
           </div>
         ) : (
           <ul className="scribble-card overflow-hidden">
@@ -156,20 +157,20 @@ function CommentNode({
 
   return (
     <div className="p-4">
-      <header className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
+      <header className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
         <HoloSeal hash={comment.authorAnonId} size={16} />
         <Link
           href={`/u/${comment.authorAnonId}`}
           className="rounded px-0.5 transition hover:text-acid"
         >
           {comment.displayName ? (
-            <span className="text-[12px] text-text">@{comment.displayName}</span>
+            <span className="font-medium text-text">@{comment.displayName}</span>
           ) : (
-            <span className="text-[11px] text-text-2">{comment.authorAnonId}</span>
+            <span className="font-numeric text-[12px] text-text-2">{comment.authorAnonId}</span>
           )}
         </Link>
         <span className="text-muted-2">·</span>
-        <span className="scribble-chip" style={{ padding: "2px 6px 2px 4px", fontSize: 10 }}>
+        <span className="scribble-chip" style={{ padding: "2px 6px 2px 4px", fontSize: 11 }}>
           <TokenIcon kind={comment.badgeKind} size={12} />
           <span>${symbol}</span>
         </span>
@@ -177,12 +178,12 @@ function CommentNode({
         <span>{timeAgo(comment.createdAt)}</span>
         <button
           onClick={onReply}
-          className="ml-auto rounded px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.06em] transition hover:text-acid"
+          className="ml-auto rounded px-2 py-0.5 text-[13px] transition hover:text-acid"
         >
-          reply
+          Reply
         </button>
       </header>
-      <p className="whitespace-pre-wrap break-words font-mono text-[13px] leading-relaxed text-text">
+      <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text">
         {comment.content}
       </p>
 
@@ -203,25 +204,25 @@ function ChildComment({ comment }: { comment: Comment }) {
   const meta = tokenFor(comment.badgeKind);
   const symbol = meta ? meta.symbol : comment.badgeKind;
   return (
-    <div className="rounded border border-line bg-bg-3/50 px-3 py-2">
-      <header className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
+    <div className="rounded-lg border border-line bg-bg-2 px-3 py-2">
+      <header className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
         <HoloSeal hash={comment.authorAnonId} size={14} />
         <Link
           href={`/u/${comment.authorAnonId}`}
           className="rounded px-0.5 transition hover:text-acid"
         >
           {comment.displayName ? (
-            <span className="text-[12px] text-text">@{comment.displayName}</span>
+            <span className="font-medium text-text">@{comment.displayName}</span>
           ) : (
-            <span className="text-[11px] text-text-2">{comment.authorAnonId}</span>
+            <span className="font-numeric text-[12px] text-text-2">{comment.authorAnonId}</span>
           )}
         </Link>
         <span className="text-muted-2">·</span>
-        <span className="text-[10px]">${symbol}</span>
+        <span className="text-[12px] text-text-2">${symbol}</span>
         <span className="text-muted-2">·</span>
         <span>{timeAgo(comment.createdAt)}</span>
       </header>
-      <p className="whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-text">
+      <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text">
         {comment.content}
       </p>
     </div>

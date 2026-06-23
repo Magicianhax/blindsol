@@ -74,21 +74,21 @@ export default function PostPage({ params }: PageProps) {
       <main className="mx-auto max-w-3xl px-4 py-6">
         <Link
           href="/"
-          className="scribble-btn scribble-btn--ghost mb-5 inline-flex"
+          className="mb-5 inline-flex items-center gap-1.5 text-[13px] text-muted transition hover:text-text"
         >
           <BackIcon />
-          back to feed
+          Back to feed
         </Link>
 
         {err && (
-          <div className="mb-4 rounded border border-danger/40 bg-danger/10 p-3 font-mono text-[12px] text-danger">
-            oops — {err}
+          <div className="mb-4 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5 text-[13px] text-danger">
+            Error: {err}
           </div>
         )}
 
         {loading && !post && (
-          <div className="scribble-card p-10 text-center font-mono text-[13px] text-muted">
-            loading…
+          <div className="scribble-card p-10 text-center text-[13px] text-muted">
+            Loading…
           </div>
         )}
 
@@ -125,7 +125,7 @@ function ThreadDetail({
 
   async function vote(kind: "up" | "down") {
     if (!badge) {
-      setVoteErr("claim a badge to vote");
+      setVoteErr("Claim a badge to vote");
       return;
     }
     setBusy(true);
@@ -142,12 +142,12 @@ function ThreadDetail({
 
   return (
     <article className="scribble-card p-6">
-      <header className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted">
+      <header className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
         <Link
           href={`/?filter=${post.badgeKind}`}
-          className="font-mono text-[11px] text-text-2 transition hover:text-acid"
+          className="text-text-2 transition hover:text-acid"
         >
-          ← /t/{symbol.toLowerCase()}
+          ← Back to ${symbol}
         </Link>
         <span className="text-muted-2">·</span>
         <span className="scribble-chip" style={{ padding: "3px 8px 3px 5px" }}>
@@ -161,9 +161,9 @@ function ThreadDetail({
           className="rounded px-0.5 transition hover:text-acid"
         >
           {post.displayName ? (
-            <span className="font-mono text-[12px] text-text">@{post.displayName}</span>
+            <span className="font-medium text-text">@{post.displayName}</span>
           ) : (
-            <span className="font-mono text-[11px] text-text-2">{post.authorAnonId}</span>
+            <span className="font-numeric text-[12px] text-text-2">{post.authorAnonId}</span>
           )}
         </Link>
         <VerifiedDot />
@@ -172,48 +172,48 @@ function ThreadDetail({
       </header>
 
       {title && (
-        <h1 className="mb-3 break-words font-mono text-[22px] font-medium leading-snug tracking-tight text-text sm:text-[26px]">
+        <h1 className="mb-3 break-words text-[22px] font-semibold leading-snug tracking-tight text-text sm:text-[26px]">
           {title}
         </h1>
       )}
       {body && (
-        <p className="whitespace-pre-wrap break-words font-mono text-[14px] leading-relaxed text-text-2">
+        <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-text-2">
           {body}
         </p>
       )}
       {!title && !body && (
-        <p className="font-mono text-[13px] text-muted">(empty post)</p>
+        <p className="text-[13px] text-muted">(empty post)</p>
       )}
 
       <footer className="mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-4">
         <button
           onClick={() => vote("up")}
           disabled={busy || !badge}
-          className={`scribble-chip ${score > 0 ? "scribble-chip--active" : ""} disabled:opacity-40`}
+          className={`scribble-chip ${score > 0 ? "scribble-chip--active" : ""} hover:text-acid disabled:opacity-40`}
           title={badge ? "Upvote" : "Claim a badge to vote"}
         >
-          ▲ <span className="font-mono">{upCount}</span>
+          <ArrowUpIcon /> <span className="font-numeric">{upCount}</span>
         </button>
         <button
           onClick={() => vote("down")}
           disabled={busy || !badge}
-          className={`scribble-chip ${score < 0 ? "scribble-chip--active" : ""} disabled:opacity-40`}
+          className={`scribble-chip ${score < 0 ? "scribble-chip--active" : ""} hover:text-text disabled:opacity-40`}
           title={badge ? "Downvote" : "Claim a badge to vote"}
         >
-          ▼ <span className="font-mono">{downCount}</span>
+          <ArrowDownIcon /> <span className="font-numeric">{downCount}</span>
         </button>
-        <span className="ml-2 font-mono text-[11px] uppercase tracking-[0.1em] text-muted">
-          score{" "}
+        <span className="ml-2 text-[13px] text-muted">
+          Score{" "}
           <span
-            className={`font-mono ${
-              score > 0 ? "text-acid" : score < 0 ? "text-danger" : "text-text-2"
+            className={`font-numeric ${
+              score > 0 ? "text-acid" : score < 0 ? "text-text-2" : "text-muted"
             }`}
           >
             {score > 0 ? `+${score}` : score}
           </span>
         </span>
         {voteErr && (
-          <span className="ml-auto font-mono text-[11px] text-danger">{voteErr}</span>
+          <span className="ml-auto text-[13px] text-danger">{voteErr}</span>
         )}
       </footer>
     </article>
@@ -224,6 +224,22 @@ function BackIcon() {
   return (
     <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6">
       <path d="M13 8H3M7 4L3 8l4 4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ArrowUpIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 9 L8 4 L13 9 M8 4 L8 14" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ArrowDownIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 7 L8 12 L13 7 M8 12 L8 2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

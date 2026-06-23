@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { MobileTabBar } from "@/components/mobile-tab-bar";
 import "./globals.css";
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-mono",
-  display: "swap",
-});
-
-const spaceGrotesk = Space_Grotesk({
+// Clean sans for the whole UI; a real monospace stays available for hashes,
+// anon ids, wallet strings and vote counts via the `numeric` utility.
+const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-mono-real",
   display: "swap",
 });
 
@@ -31,14 +33,14 @@ export const metadata: Metadata = {
 // React hydrates, so the saved `data-theme` attribute is applied to <html>
 // before any styles resolve. The string is a hardcoded constant — no user
 // input is interpolated, so dangerouslySetInnerHTML is safe here.
-const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('blindsol_theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');}catch(_){document.documentElement.setAttribute('data-theme','dark');}})();`;
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('blindsol_theme');document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light');}catch(_){document.documentElement.setAttribute('data-theme','light');}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${jetbrainsMono.variable} ${spaceGrotesk.variable}`}
-      data-theme="dark"
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      data-theme="light"
       suppressHydrationWarning
     >
       <body className="antialiased">

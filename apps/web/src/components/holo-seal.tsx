@@ -3,11 +3,11 @@
 import { useId, useMemo } from "react";
 
 /**
- * Holographic anonymous-badge seal — deterministic, animated SVG sigil
- * derived from a hash string. Style: monochrome acid-green strokes on dark,
- * rotating concentric layers, hash-driven radial glyphs, subtle pulsing
- * core. The visual is the brand's primary anonymous-identity primitive —
- * we use it instead of a portrait avatar.
+ * Anonymous-badge seal — a deterministic SVG sigil derived from a hash string.
+ * Calm accent-green strokes on a light surface, concentric layers, hash-driven
+ * radial glyphs, and a small solid core. It is the brand's subtle
+ * anonymous-identity primitive — used in place of a portrait avatar. Static by
+ * default; pass `animate` to enable the slow rotation.
  */
 function hashToInts(hash: string, count = 12): number[] {
   const out: number[] = [];
@@ -26,7 +26,7 @@ interface HoloSealProps {
   animate?: boolean;
 }
 
-export function HoloSeal({ hash, size = 36, color, animate = true }: HoloSealProps) {
+export function HoloSeal({ hash, size = 36, color, animate = false }: HoloSealProps) {
   const ints = useMemo(() => hashToInts(hash, 12), [hash]);
   const reactId = useId();
   const id = reactId.replace(/[^a-z0-9]/gi, "");
@@ -68,8 +68,8 @@ export function HoloSeal({ hash, size = 36, color, animate = true }: HoloSealPro
       >
         <defs>
           <radialGradient id={`grad-${id}`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor={c} stopOpacity="0.25" />
-            <stop offset="60%" stopColor={c} stopOpacity="0.04" />
+            <stop offset="0%" stopColor={c} stopOpacity="0.08" />
+            <stop offset="60%" stopColor={c} stopOpacity="0.02" />
             <stop offset="100%" stopColor={c} stopOpacity="0" />
           </radialGradient>
           <clipPath id={`clip-${id}`}>
@@ -93,7 +93,7 @@ export function HoloSeal({ hash, size = 36, color, animate = true }: HoloSealPro
             fill="none"
             stroke={c}
             strokeWidth="0.5"
-            strokeOpacity="0.5"
+            strokeOpacity="0.4"
           />
           {tickArr.map((t, i) => (
             <line
@@ -104,7 +104,7 @@ export function HoloSeal({ hash, size = 36, color, animate = true }: HoloSealPro
               y2={cy - (t.long ? 42 : 44.5)}
               stroke={c}
               strokeWidth={t.long ? 0.8 : 0.4}
-              strokeOpacity={t.long ? 0.95 : 0.35}
+              strokeOpacity={t.long ? 0.7 : 0.3}
               transform={`rotate(${t.angle} ${cx} ${cy})`}
             />
           ))}
@@ -203,31 +203,39 @@ export function HoloSeal({ hash, size = 36, color, animate = true }: HoloSealPro
   );
 }
 
-/** Verified-holder dot — small acid pill with mono caps label. */
-export function VerifiedDot({ size = 7 }: { size?: number }) {
+/**
+ * Verified-holder marker — a small accent check glyph. Shows a quiet "verified
+ * holder" label by default (post detail / profile); pass `label={false}` for a
+ * glyph-only badge in dense lists like the feed, where the title carries the
+ * meaning for assistive tech.
+ */
+export function VerifiedDot({ size = 12, label = true }: { size?: number; label?: boolean }) {
   return (
     <span
+      title="Verified holder"
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: 5,
+        gap: 4,
         color: "var(--acid)",
-        fontSize: 9,
-        fontFamily: "var(--font-mono), JetBrains Mono, monospace",
-        letterSpacing: "0.1em",
-        textTransform: "uppercase",
+        fontSize: 11,
       }}
     >
-      <span
-        style={{
-          width: size,
-          height: size,
-          borderRadius: "50%",
-          background: "var(--acid)",
-          boxShadow: "0 0 6px var(--acid-line)",
-        }}
-      />
-      verified holder
+      <svg
+        viewBox="0 0 16 16"
+        width={size}
+        height={size}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        style={{ display: "block", flexShrink: 0 }}
+        aria-label={label ? undefined : "Verified holder"}
+        role={label ? undefined : "img"}
+        aria-hidden={label ? true : undefined}
+      >
+        <path d="M3 8.5 L6.5 12 L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {label ? "verified holder" : null}
     </span>
   );
 }

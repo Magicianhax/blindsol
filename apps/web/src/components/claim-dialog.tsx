@@ -78,22 +78,22 @@ export function ClaimDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
       <div className="scribble-card wobble-in relative w-full max-w-2xl">
-        <div className="flex items-start justify-between gap-3 border-b-2 border-dashed border-border-soft p-5">
+        <div className="flex items-start justify-between gap-3 border-b border-line p-5">
           <div>
-            <h2 className="font-display text-3xl leading-tight text-ink">
-              <span className="scribble-underline">claim a badge</span>
+            <h2 className="text-2xl font-semibold leading-tight text-text">
+              Claim a badge
             </h2>
-            <p className="mt-1 text-[15px] leading-snug text-text-2">
-              we&apos;ll check the chain and prove you actually hold the bag, then hand you an
-              anonymous identity. wallet ↔ identity link stays sealed in MagicBlock&apos;s rollup.
+            <p className="mt-1 text-[15px] leading-snug text-muted">
+              We&apos;ll check the chain and prove you actually hold the bag, then hand you an
+              anonymous identity. The wallet ↔ identity link stays sealed in MagicBlock&apos;s rollup.
             </p>
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg border-2 border-ink p-1.5 transition hover:bg-crayon-yellow"
+            className="rounded-lg p-1.5 text-muted transition hover:bg-bg-3 hover:text-text"
           >
             <CloseIcon />
           </button>
@@ -103,7 +103,7 @@ export function ClaimDialog({
           {CATEGORIES.map((cat) => (
             <div key={cat.label} className="mb-5 last:mb-0">
               <div className="mb-2 flex items-baseline gap-3">
-                <h3 className="font-display text-xl text-ink">
+                <h3 className="text-[15px] font-semibold text-text">
                   {cat.emoji} {cat.label}
                 </h3>
                 <span className="text-sm text-muted">— {cat.description}</span>
@@ -118,18 +118,18 @@ export function ClaimDialog({
                       key={k}
                       onClick={() => setKind(k)}
                       disabled={owned}
-                      className={`flex items-center gap-2 rounded-lg border-2 p-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      className={`flex items-center gap-2 rounded-lg border p-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
                         owned
-                          ? "border-dashed border-border-soft bg-surface-2/40"
+                          ? "border-line bg-bg-2"
                           : isActive
-                          ? "border-ink bg-crayon-yellow shadow-pen-sm"
-                          : "border-dashed border-border-soft hover:border-ink hover:bg-surface-2"
+                          ? "border-acid-line bg-acid-soft"
+                          : "border-line hover:border-line-2 hover:bg-bg-2"
                       }`}
                       title={owned ? "already in your badge purse" : undefined}
                     >
                       <TokenIcon kind={k} size={32} />
                       <div className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate font-display text-lg leading-none text-ink">${meta.symbol}</span>
+                        <span className="truncate text-[15px] font-semibold leading-none text-text">${meta.symbol}</span>
                         <span className="truncate text-[11px] text-muted">
                           {owned ? "already claimed" : "verified holder"}
                         </span>
@@ -144,24 +144,24 @@ export function ClaimDialog({
         </div>
 
         {err && (
-          <div className="mx-5 mb-3 rounded-lg border-2 border-crayon-red bg-crayon-red/10 px-3 py-2 text-sm text-crayon-red">
-            oops — {err}
+          <div className="mx-5 mb-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">
+            Error: {err}
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-dashed border-border-soft p-5">
-          <span className="font-mono text-xs text-muted">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line p-5">
+          <span className="font-numeric text-xs text-muted">
             {wallet
               ? `${wallet.address.slice(0, 4)}…${wallet.address.slice(-4)}`
               : "wallet not connected"}
           </span>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="scribble-btn scribble-btn--ghost">
-              nevermind
+              Nevermind
             </button>
             {!authenticated || !wallet ? (
               <button onClick={login} className="scribble-btn scribble-btn--primary">
-                connect first
+                Connect first
               </button>
             ) : (
               <button
@@ -169,8 +169,8 @@ export function ClaimDialog({
                 disabled={busy || !kind}
                 className="scribble-btn scribble-btn--primary"
               >
-                {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
-                {busy ? "claiming…" : "sign & claim"}
+                {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-bg/40 border-t-bg" />}
+                {busy ? "Claiming…" : "Sign & claim"}
               </button>
             )}
           </div>
@@ -182,7 +182,7 @@ export function ClaimDialog({
 
 function CheckIcon() {
   return (
-    <svg viewBox="0 0 16 16" className="ml-auto h-4 w-4 text-ink" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <svg viewBox="0 0 16 16" className="ml-auto h-4 w-4 text-acid" fill="none" stroke="currentColor" strokeWidth="2.5">
       <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

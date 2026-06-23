@@ -2,15 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TopNav } from "@/components/top-nav";
-import { LeftSidebar, type SortKind } from "@/components/left-sidebar";
-import { MobileDrawer } from "@/components/mobile-drawer";
-import { RightRail } from "@/components/right-rail";
 import { PostComposer } from "@/components/post-composer";
 import { ThreadRow } from "@/components/thread-row";
 import { ClaimDialog } from "@/components/claim-dialog";
 import { useBadge } from "@/components/badge-context";
 import { api, type Post } from "@/lib/api";
-import { tokenFor } from "@/lib/tokens";
+import { TOKEN_KINDS, tokenFor } from "@/lib/tokens";
+
+type SortKind = "new" | "top";
 
 export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -18,7 +17,6 @@ export default function HomePage() {
   const [sort, setSort] = useState<SortKind>("new");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [claiming, setClaiming] = useState(false);
 
   // Sync the active badge with the community filter — if the user filters
@@ -61,95 +59,42 @@ export default function HomePage() {
     return list;
   }, [posts, sort]);
 
-  const filterMeta = filter ? tokenFor(filter) : undefined;
-
   return (
     <>
-      <TopNav
-        active={sort === "top" ? "trending" : "home"}
-        onOpenMenu={() => setMenuOpen(true)}
-      />
+      <TopNav active={sort === "top" ? "trending" : "home"} />
 
-      <MobileDrawer open={menuOpen} onClose={() => setMenuOpen(false)}>
-        <LeftSidebar
-          variant="drawer"
-          active={filter}
-          onSelect={setFilter}
-          sort={sort}
-          onSort={setSort}
-          postCount={posts.length}
-          onItemSelected={() => setMenuOpen(false)}
-          onClaim={() => {
-            setMenuOpen(false);
-            setClaiming(true);
-          }}
-        />
-      </MobileDrawer>
+      <div className="mx-auto w-full max-w-[748px] px-3 pb-24 sm:px-4">
+        <FeedNav sort={sort} onSort={setSort} filter={filter} onFilter={setFilter} />
 
-      <div className="app-layout">
-        <LeftSidebar
-          active={filter}
-          onSelect={setFilter}
-          sort={sort}
-          onSort={setSort}
-          postCount={posts.length}
-          onClaim={() => setClaiming(true)}
-        />
+        <div className="py-3">
+          <PostComposer requiredKind={filter} onPosted={refresh} />
+        </div>
 
-        <main className="app-main">
-          <div className="mb-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="font-mono text-[20px] font-medium leading-tight tracking-tight text-text">
-              <span className="text-muted-2">~/</span>
-              {filter ? `t/${filterMeta?.symbol.toLowerCase()}` : sort === "top" ? "trending" : "feed"}
-            </h1>
-            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
-              {filter
-                ? `posts from $${filterMeta?.symbol} holders`
-                : sort === "top"
-                ? "ranked by ▲ minus ▼"
-                : "posts from holders of every verified token"}
-            </span>
+        {err && (
+          <div className="mb-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5 text-[13px] text-danger">
+            Error: {err}
           </div>
+        )}
 
-          <div className="mb-4">
-            <PostComposer requiredKind={filter} onPosted={refresh} />
+        {loading ? (
+          <ListSkeleton />
+        ) : visiblePosts.length === 0 ? (
+          <EmptyState filter={filter} />
+        ) : (
+          <ol className="-mx-2">
+            {visiblePosts.map((p, i) => (
+              <ThreadRow key={p.id} post={p} rank={i + 1} />
+            ))}
+          </ol>
+        )}
+
+        {!loading && visiblePosts.length > 0 && (
+          <div className="px-2 pt-4 text-[13px] text-muted">
+            <button className="hover:text-text hover:underline">More</button>
           </div>
+        )}
 
-          {err && (
-            <div className="mb-4 rounded border border-danger/40 bg-danger/10 p-3 font-mono text-[12px] text-danger">
-              oops — {err}
-            </div>
-          )}
-
-          <div className="overflow-hidden rounded-md border border-line bg-bg-2">
-            <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
-              <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
-                {visiblePosts.length} {visiblePosts.length === 1 ? "thread" : "threads"}
-              </span>
-              <SortPills sort={sort} onSort={setSort} />
-            </header>
-            {loading ? (
-              <ListSkeleton />
-            ) : visiblePosts.length === 0 ? (
-              <EmptyState filter={filter} />
-            ) : (
-              <ul>
-                {visiblePosts.map((p) => (
-                  <li key={p.id}>
-                    <ThreadRow post={p} />
-                  </li>
-                ))}
-              </ul>
-            )}
-            <footer className="border-t border-line px-4 py-3 text-center font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
-              end of feed · <span className="text-acid">load older</span>
-            </footer>
-          </div>
-
-          <FooterNote />
-        </main>
-
-        <RightRail />
+        <FooterNote />
       </div>
 
       {claiming && <ClaimDialog onClose={() => setClaiming(false)} />}
@@ -157,44 +102,76 @@ export default function HomePage() {
   );
 }
 
-function SortPills({ sort, onSort }: { sort: SortKind; onSort: (s: SortKind) => void }) {
-  const pills: Array<{ id: SortKind; label: string }> = [
-    { id: "top", label: "trending" },
-    { id: "new", label: "new" },
-  ];
+/** HN-style sub-nav: sort tabs on the left, a scrollable token strip after. */
+function FeedNav({
+  sort,
+  onSort,
+  filter,
+  onFilter,
+}: {
+  sort: SortKind;
+  onSort: (s: SortKind) => void;
+  filter: string | undefined;
+  onFilter: (k: string | undefined) => void;
+}) {
   return (
-    <div className="flex gap-0.5 rounded border border-line bg-bg-3 p-0.5">
-      {pills.map((p) => {
-        const active = sort === p.id;
-        return (
-          <button
-            key={p.id}
-            onClick={() => onSort(p.id)}
-            className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.06em] transition ${
-              active ? "bg-bg-4 text-acid" : "text-text-2 hover:text-text"
-            }`}
-          >
-            {p.label}
-          </button>
-        );
-      })}
-    </div>
+    <nav className="sticky top-[56px] z-20 -mx-3 flex items-center gap-2 border-b border-line bg-bg/90 px-3 py-2 backdrop-blur sm:top-[60px] sm:-mx-4 sm:px-4">
+      <div className="flex shrink-0 items-center gap-1">
+        <Tab active={sort === "top"} onClick={() => onSort("top")}>
+          top
+        </Tab>
+        <Tab active={sort === "new"} onClick={() => onSort("new")}>
+          new
+        </Tab>
+      </div>
+      <span className="h-4 w-px shrink-0 bg-line" />
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar">
+        <Tab active={!filter} onClick={() => onFilter(undefined)}>
+          all
+        </Tab>
+        {TOKEN_KINDS.map((kind) => {
+          const meta = tokenFor(kind);
+          return (
+            <Tab key={kind} active={filter === kind} onClick={() => onFilter(kind)}>
+              ${meta?.symbol ?? kind}
+            </Tab>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function Tab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-[13px] transition ${
+        active ? "font-semibold text-acid" : "text-muted hover:bg-bg-2 hover:text-text"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
 function ListSkeleton() {
   return (
-    <div>
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="thread-row">
-          <div className="flex flex-col items-center gap-1 pt-0.5">
-            <div className="h-3 w-3 animate-pulse rounded bg-bg-3" />
-            <div className="h-3 w-6 animate-pulse rounded bg-bg-3" />
-            <div className="h-3 w-3 animate-pulse rounded bg-bg-3" />
-          </div>
-          <div className="space-y-2">
-            <div className="h-4 w-3/4 animate-pulse rounded bg-bg-3" />
-            <div className="h-3 w-1/2 animate-pulse rounded bg-bg-3" />
+    <div className="px-2">
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div key={i} className="flex items-baseline gap-2 py-1.5">
+          <div className="h-3 w-3 shrink-0 animate-pulse rounded bg-bg-3" />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="h-3.5 w-2/3 animate-pulse rounded bg-bg-3" />
+            <div className="h-2.5 w-1/3 animate-pulse rounded bg-bg-3" />
           </div>
         </div>
       ))}
@@ -204,12 +181,12 @@ function ListSkeleton() {
 
 function EmptyState({ filter }: { filter: string | undefined }) {
   return (
-    <div className="px-6 py-16 text-center">
-      <h3 className="font-mono text-[14px] text-text">empty.</h3>
-      <p className="mt-2 font-mono text-[12px] text-text-2">
+    <div className="px-2 py-16 text-center">
+      <h3 className="text-[15px] font-medium text-text">No threads yet</h3>
+      <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-muted">
         {filter
-          ? "be the first holder to post in this token's forum."
-          : "no threads yet. claim a badge and start the conversation."}
+          ? "Be the first holder to post in this token's forum."
+          : "Claim a badge and start the conversation."}
       </p>
     </div>
   );
@@ -217,20 +194,20 @@ function EmptyState({ filter }: { filter: string | undefined }) {
 
 function FooterNote() {
   return (
-    <footer className="mt-6 flex flex-wrap items-center gap-3 border-t border-line pt-4 font-mono text-[11px] text-muted">
-      <a href="/about" className="text-text-2 transition hover:text-acid">
-        how it works →
+    <footer className="mt-8 flex flex-wrap items-center gap-3 border-t border-line px-2 pt-4 text-[13px] text-muted">
+      <a href="/about" className="transition hover:text-text">
+        How it works
       </a>
       <span className="text-muted-2">·</span>
       <a
         href="https://docs.magicblock.gg"
         target="_blank"
         rel="noreferrer"
-        className="text-text-2 transition hover:text-acid"
+        className="transition hover:text-text"
       >
-        magicblock docs ↗
+        MagicBlock docs ↗
       </a>
-      <span className="ml-auto uppercase tracking-[0.1em] text-muted-2">v0.1 · mainnet beta</span>
+      <span className="ml-auto text-muted-2">v0.1 · mainnet beta</span>
     </footer>
   );
 }
