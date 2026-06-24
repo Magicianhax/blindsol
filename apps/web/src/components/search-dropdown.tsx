@@ -128,8 +128,7 @@ export function SearchDropdown() {
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder="search threads, $TICKER, @handle"
-        className="scribble-input w-full"
-        style={{ paddingLeft: 36 }}
+        className="scribble-input w-full pl-9"
         aria-haspopup="listbox"
         aria-expanded={showDropdown}
       />
@@ -247,7 +246,7 @@ function buildGroups(query: string, posts: Post[] | null): ResultGroup[] {
     .slice(0, 5)
     .map<ResultItem>((kind) => ({
       kind: "token",
-      href: `/?filter=${kind}`,
+      href: `/forum?room=${kind}`,
       ticker: TOKENS[kind]!.symbol,
       name: TOKENS[kind]!.label.replace("verified $", "").replace(" holder", " holder"),
       tokenKind: kind,

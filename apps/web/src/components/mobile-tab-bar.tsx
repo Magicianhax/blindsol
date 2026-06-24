@@ -7,7 +7,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { ClaimDialog } from "./claim-dialog";
 import { useBadge } from "./badge-context";
 import { TokenIcon } from "./token-icon";
-import { HoloSeal } from "./holo-seal";
+import { Seal } from "./seal";
 import { TOKENS, TOKEN_KINDS, tokenFor } from "@/lib/tokens";
 
 type TabId = "feed" | "tokens" | "post" | "purse" | "me";
@@ -48,7 +48,7 @@ export function MobileTabBar() {
   const onPost = () => {
     if (!authenticated) return requireConnect();
     if (!hasBadge) return requireBadge();
-    router.push("/");
+    router.push("/forum");
   };
 
   const onPurse = () => {
@@ -66,7 +66,7 @@ export function MobileTabBar() {
   return (
     <>
       <nav className="mobile-tab-bar md:hidden">
-        <TabLink id="feed" current={current} href="/" label="feed" icon={<FeedIcon />} />
+        <TabLink id="feed" current={current} href="/forum" label="feed" icon={<FeedIcon />} />
         <TabButton
           id="tokens"
           current={showTokens ? "tokens" : current}
@@ -97,7 +97,7 @@ export function MobileTabBar() {
           onClose={() => setShowTokens(false)}
           onPick={(kind) => {
             setShowTokens(false);
-            router.push(`/?filter=${kind}`);
+            router.push(`/forum?room=${kind}`);
           }}
         />
       )}
@@ -313,7 +313,7 @@ function PurseSheet({
                     isActive ? "bg-bg-2" : "hover:bg-bg-2"
                   }`}
                 >
-                  <HoloSeal hash={b.anonId ?? b.kind} size={32} animate={isActive} />
+                  <Seal hash={b.anonId ?? b.kind} size={32} />
                   <div className="flex-1 min-w-0 leading-tight">
                     <div className={`font-numeric text-[14px] ${isActive ? "font-medium text-acid" : "text-text"}`}>
                       ${meta?.symbol ?? b.kind}

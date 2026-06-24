@@ -1,14 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useState } from "react";
+import type { CSSProperties } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { TopNav } from "@/components/top-nav";
+import { RoomNav } from "@/components/room-nav";
 import { ThreadRow } from "@/components/thread-row";
+import { TokenChip } from "@/components/token-chip";
 import { TokenIcon } from "@/components/token-icon";
-import { HoloSeal, VerifiedDot } from "@/components/holo-seal";
+import { Seal } from "@/components/seal";
 import { UsernameDialog } from "@/components/username-dialog";
+import { ClaimDialog } from "@/components/claim-dialog";
+import { SiteFooter } from "@/components/site-footer";
 import { useBadge } from "@/components/badge-context";
 import { tokenFor } from "@/lib/tokens";
+import { timeAgo, paragraphs } from "@/lib/format";
 import { api, ApiError, type Comment, type Post, type UserProfile } from "@/lib/api";
 
 interface PageProps {
@@ -17,12 +23,40 @@ interface PageProps {
 
 type Tab = "posts" | "comments";
 
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return "just now";
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
-  return `${Math.floor(ms / 86_400_000)}d ago`;
+/** Cosmetic seal-picture override stored purely in localStorage (no API). */
+interface PfpChoice {
+  hash: string;
+  color: string;
+}
+
+/** localStorage key for the cosmetic, device-only seal-picture override. */
+const PFP_STORAGE_KEY = "blindsol:pfp:v1";
+/** Handles that already look like a raw anon id are resolved client-side. */
+const ANON_HANDLE_PREFIX = "anon_";
+const PFP_COLORS = [
+  "#C2452A",
+  "#14C98E",
+  "#7BC242",
+  "#F2A900",
+  "#4C8DFF",
+  "#7A3FE4",
+  "#B07F4E",
+  "#1B1A17",
+];
+
+function loadPfp(): PfpChoice | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PFP_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PfpChoice>;
+    if (typeof parsed.hash === "string" && typeof parsed.color === "string") {
+      return { hash: parsed.hash, color: parsed.color };
+    }
+  } catch {
+    // corrupt value — ignore and fall back to the default seal
+  }
+  return null;
 }
 
 export default function ProfilePage({ params }: PageProps) {
@@ -35,18 +69,35 @@ export default function ProfilePage({ params }: PageProps) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [pickingHandle, setPickingHandle] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [pfpOpen, setPfpOpen] = useState(false);
+  const [pfp, setPfp] = useState<PfpChoice | null>(null);
 
   // Identifies whether the visitor is looking at their own profile, so
   // we can surface "pick a handle" inline instead of burying it in the
   // header dropdown.
-  const { active: activeBadge } = useBadge();
+  const { active: activeBadge, badges } = useBadge();
   const isOwnProfile = !!activeBadge?.anonId && activeBadge.anonId === anonId;
+
+  // Cosmetic, local-only seal picture override.
+  useEffect(() => {
+    setPfp(loadPfp());
+  }, []);
+
+  const choosePfp = useCallback((choice: PfpChoice) => {
+    setPfp(choice);
+    try {
+      window.localStorage.setItem(PFP_STORAGE_KEY, JSON.stringify(choice));
+    } catch {
+      // storage may be unavailable (private mode) — the in-memory state still updates
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setErr(null);
     try {
-      const resolved = handle.startsWith("anon_")
+      const resolved = handle.startsWith(ANON_HANDLE_PREFIX)
         ? { anonId: handle, username: null as string | null }
         : await api.resolveHandle(handle);
       setAnonId(resolved.anonId);
@@ -74,59 +125,83 @@ export default function ProfilePage({ params }: PageProps) {
     refresh();
   }, [refresh]);
 
+  const resolvedAnon = anonId ?? handle;
+
+  // Seal karma = sum of upvotes across the loaded posts + comments.
+  const karma = useMemo(() => {
+    const fromPosts = posts.reduce((acc, p) => acc + (p.upCount ?? 0), 0);
+    const fromComments = comments.reduce((acc, c) => acc + (c.upCount ?? 0), 0);
+    return fromPosts + fromComments;
+  }, [posts, comments]);
+
   return (
     <>
       <TopNav />
-      <main className="mx-auto max-w-3xl px-4 py-6">
-        <Link
-          href="/"
-          className="mb-5 inline-flex items-center gap-1.5 text-[13px] text-muted transition hover:text-text"
-        >
-          <BackIcon />
-          Back to feed
+      <RoomNav />
+      <main className="bs-main">
+        <Link href="/forum" className="back">
+          ← all rooms
         </Link>
 
         {err === "not_found" ? (
           <NotFound handle={handle} />
         ) : err ? (
-          <div className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5 text-[13px] text-danger">
-            Error: {err}
-          </div>
+          <div className="nocmt">Error: {err}</div>
         ) : loading || !profile ? (
-          <div className="scribble-card p-10 text-center text-[13px] text-muted">
-            Loading…
-          </div>
+          <div className="nocmt">Loading…</div>
         ) : (
           <>
             <ProfileHeader
               profile={profile}
-              anonId={anonId ?? handle}
+              anonId={resolvedAnon}
               isOwn={isOwnProfile}
+              karma={karma}
+              pfp={pfp}
+              onEditPfp={() => setPfpOpen((v) => !v)}
               onPickHandle={() => setPickingHandle(true)}
             />
 
-            {isOwnProfile && !profile.username && (
-              <PickHandleCta onPick={() => setPickingHandle(true)} />
+            {isOwnProfile && (
+              <HeldRooms badges={badges} />
             )}
 
-            <div className="my-5 flex gap-2 border-b border-line">
-              <TabButton
-                active={tab === "posts"}
+            {isOwnProfile && (
+              <BadgeRow badges={badges} onClaim={() => setClaiming(true)} />
+            )}
+
+            {isOwnProfile && pfpOpen && (
+              <PfpPicker
+                anonId={resolvedAnon}
+                current={pfp}
+                onChoose={choosePfp}
+                onDone={() => setPfpOpen(false)}
+              />
+            )}
+
+            <div className="ptabs">
+              <button
+                className={`ptab${tab === "posts" ? " active" : ""}`}
                 onClick={() => setTab("posts")}
-                label="posts"
-                count={posts.length}
-              />
-              <TabButton
-                active={tab === "comments"}
+              >
+                Posts <span className="pt-n">{posts.length}</span>
+              </button>
+              <button
+                className={`ptab${tab === "comments" ? " active" : ""}`}
                 onClick={() => setTab("comments")}
-                label="comments"
-                count={comments.length}
-              />
+              >
+                Comments <span className="pt-n">{comments.length}</span>
+              </button>
             </div>
 
-            {tab === "posts" ? <PostsList posts={posts} /> : <CommentsList comments={comments} />}
+            {tab === "posts" ? (
+              <PostsList posts={posts} isOwn={isOwnProfile} />
+            ) : (
+              <CommentsList comments={comments} />
+            )}
           </>
         )}
+
+        <SiteFooter />
       </main>
 
       {pickingHandle && (
@@ -139,30 +214,9 @@ export default function ProfilePage({ params }: PageProps) {
           }}
         />
       )}
-    </>
-  );
-}
 
-/**
- * Inline CTA shown above the tabs on a user's own profile when they
- * haven't picked a handle yet. The dialog itself still lives in the
- * header dropdown for repeat visits, but first-time visitors should
- * see the choice surfaced where they're already looking.
- */
-function PickHandleCta({ onPick }: { onPick: () => void }) {
-  return (
-    <div className="mt-4 flex flex-col gap-3 rounded-xl border border-line bg-bg p-4 shadow-sm sm:flex-row sm:items-center">
-      <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-medium text-text">Pick a handle</div>
-        <p className="mt-1 text-[12px] leading-relaxed text-text-2">
-          You&apos;re posting as a long anon hash right now. Claim a public handle so people can
-          recognise you across threads. No link to your wallet — that mapping stays in MagicBlock&apos;s TEE.
-        </p>
-      </div>
-      <button onClick={onPick} className="scribble-btn scribble-btn--primary whitespace-nowrap">
-        Pick a handle
-      </button>
-    </div>
+      {claiming && <ClaimDialog onClose={() => setClaiming(false)} />}
+    </>
   );
 }
 
@@ -170,86 +224,177 @@ function ProfileHeader({
   profile,
   anonId,
   isOwn,
+  karma,
+  pfp,
+  onEditPfp,
   onPickHandle,
 }: {
   profile: UserProfile;
   anonId: string;
   isOwn: boolean;
+  karma: number;
+  pfp: PfpChoice | null;
+  onEditPfp: () => void;
   onPickHandle: () => void;
 }) {
-  const meta = profile.badgeKind ? tokenFor(profile.badgeKind) : null;
-  const symbol = meta?.symbol ?? profile.badgeKind ?? "anon";
+  const sealHash = pfp?.hash ?? anonId;
 
   return (
-    <div className="scribble-card flex flex-wrap items-center gap-5 p-6">
-      <HoloSeal hash={anonId} size={64} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-text">
-            {profile.username ? `@${profile.username}` : (
-              <span className="font-numeric text-[16px] text-text-2">{anonId}</span>
-            )}
-          </h1>
-          {profile.badgeKind ? (
-            <span className="scribble-chip" style={{ padding: "3px 8px 3px 5px" }}>
-              <TokenIcon kind={profile.badgeKind} size={14} />
-              <span>${symbol}</span>
-            </span>
-          ) : null}
-          <VerifiedDot />
-        </div>
-        {profile.username && (
-          <p className="mt-1.5 break-all font-numeric text-[11px] text-muted">{anonId}</p>
+    <div className="profile">
+      <div className="pf-seal">
+        <Seal hash={sealHash} size={68} color={pfp?.color} />
+        {isOwn && (
+          <button className="pf-editpfp" onClick={onEditPfp} type="button">
+            edit
+          </button>
         )}
-        <p className="mt-2 text-[12px] text-text-2">
-          <span className="font-numeric text-text">{profile.postCount}</span> posts ·{" "}
-          <span className="font-numeric text-text">{profile.commentCount}</span> comments
-          {profile.firstSeen ? ` · joined ${timeAgo(profile.firstSeen)}` : ""}
+      </div>
+      <div className="pf-id">
+        <h1>
+          {profile.username ? `@${profile.username}` : anonId}
+          {isOwn && <span className="tagyou">you</span>}
+        </h1>
+        <p className="pf-sub">
+          sealed anon · joined {profile.firstSeen ? `${timeAgo(profile.firstSeen)} ago` : "recently"}
+          {isOwn && (
+            <>
+              {" · "}
+              <button className="link" onClick={onPickHandle} type="button">
+                {profile.username ? "manage handle" : "pick a handle"}
+              </button>
+            </>
+          )}
+        </p>
+        <p className="pf-stats">
+          <b>{profile.postCount}</b> posts · <b>{profile.commentCount}</b> comments ·{" "}
+          <b>{karma}</b> seal karma
         </p>
       </div>
-      {isOwn && (
-        <button onClick={onPickHandle} className="scribble-btn whitespace-nowrap">
-          {profile.username ? "Manage handle" : "Pick a handle"}
-        </button>
+    </div>
+  );
+}
+
+function HeldRooms({ badges }: { badges: ReturnType<typeof useBadge>["badges"] }) {
+  return (
+    <div className="pf-tokens">
+      <span className="pf-tklabel">rooms unsealed</span>
+      {badges.length === 0 ? (
+        <span className="pf-none">none yet</span>
+      ) : (
+        badges.map((b) => {
+          const meta = tokenFor(b.kind);
+          const sym = meta?.symbol ?? b.kind;
+          return (
+            <Link
+              key={b.badgeId}
+              className="tok"
+              href={`/forum?room=${b.kind}`}
+              style={{ "--tc": meta?.color } as CSSProperties}
+            >
+              <TokenIcon kind={b.kind} size={15} className="shrink-0" />${sym}
+            </Link>
+          );
+        })
       )}
     </div>
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  label,
-  count,
+function BadgeRow({
+  badges,
+  onClaim,
 }: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count: number;
+  badges: ReturnType<typeof useBadge>["badges"];
+  onClaim: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`-mb-px rounded-t px-4 py-2.5 text-[13px] transition ${
-        active
-          ? "border-b-2 border-acid font-medium text-acid"
-          : "border-b-2 border-transparent text-muted hover:text-text"
-      }`}
-    >
-      <span className="capitalize">{label}</span>{" "}
-      <span className="font-numeric text-[11px] text-muted-2">{count}</span>
-    </button>
+    <div className="pf-badgerow">
+      <span className="pf-tklabel">badges</span>
+      {badges.map((b) => {
+        const meta = tokenFor(b.kind);
+        const sym = meta?.symbol ?? b.kind;
+        return (
+          <span key={b.badgeId} className="badge mini">
+            <TokenIcon kind={b.kind} size={17} className="shrink-0" />${sym}
+          </span>
+        );
+      })}
+      <button className="btn solid bclaim" onClick={onClaim} type="button">
+        claim more
+      </button>
+    </div>
   );
 }
 
-function PostsList({ posts }: { posts: Post[] }) {
+function PfpPicker({
+  anonId,
+  current,
+  onChoose,
+  onDone,
+}: {
+  anonId: string;
+  current: PfpChoice | null;
+  onChoose: (c: PfpChoice) => void;
+  onDone: () => void;
+}) {
+  // A couple of seed variants derived from the anon id, so the same person
+  // gets visually distinct seal options to pick from.
+  const seeds = [anonId, `${anonId}~1`, `${anonId}~2`];
+  const options: PfpChoice[] = [];
+  for (let i = 0; i < PFP_COLORS.length; i++) {
+    options.push({ hash: seeds[i % seeds.length]!, color: PFP_COLORS[i]! });
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-h">
+        <span>Choose your seal picture</span>
+        <button className="link" onClick={onDone} type="button">
+          done
+        </button>
+      </div>
+      <p className="panel-sub">
+        Purely cosmetic and stored on this device only — it never touches the chain or your anon id.
+      </p>
+      <div className="pfp-grid">
+        {options.map((opt) => {
+          const on = current?.hash === opt.hash && current?.color === opt.color;
+          return (
+            <button
+              key={`${opt.hash}|${opt.color}`}
+              className={`pfp-opt${on ? " on" : ""}`}
+              onClick={() => onChoose(opt)}
+              type="button"
+            >
+              <Seal hash={opt.hash} color={opt.color} size={44} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PostsList({ posts, isOwn }: { posts: Post[]; isOwn: boolean }) {
   if (posts.length === 0) {
-    return <div className="py-10 text-center text-[13px] text-muted">No threads yet.</div>;
+    return (
+      <div className="pf-empty">
+        No threads yet.
+        {isOwn && (
+          <>
+            {" "}
+            <Link className="link" href="/forum?compose=1">
+              Start one →
+            </Link>
+          </>
+        )}
+      </div>
+    );
   }
   return (
-    <ol className="-mx-2">
-      {posts.map((p, i) => (
-        <ThreadRow key={p.id} post={p} rank={i + 1} />
+    <ol className="feed">
+      {posts.map((p) => (
+        <ThreadRow key={p.id} post={p} />
       ))}
     </ol>
   );
@@ -257,59 +402,44 @@ function PostsList({ posts }: { posts: Post[] }) {
 
 function CommentsList({ comments }: { comments: Comment[] }) {
   if (comments.length === 0) {
-    return (
-      <div className="scribble-card-flat p-10 text-center text-[13px] text-muted">
-        No comments yet.
-      </div>
-    );
+    return <div className="pf-empty">No comments yet.</div>;
   }
   return (
-    <ul className="space-y-2">
+    <div className="pcomments">
       {comments.map((c) => {
         const meta = tokenFor(c.badgeKind);
         const symbol = meta?.symbol ?? c.badgeKind;
         return (
-          <li key={c.id}>
-            <Link
-              href={`/post/${c.postId}`}
-              className="group scribble-card-flat block px-4 py-3 transition hover:border-line-2"
-            >
-              <header className="flex items-center gap-2 text-[13px] text-muted">
-                <TokenIcon kind={c.badgeKind} size={14} />
-                <span className="text-text-2">${symbol}</span>
-                <span className="text-muted-2">·</span>
-                <span>{timeAgo(c.createdAt)}</span>
-                <span className="ml-auto text-muted transition group-hover:text-text">
-                  View thread →
-                </span>
-              </header>
-              <p className="mt-1.5 line-clamp-3 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text">
-                {c.content}
-              </p>
-            </Link>
-          </li>
+          <Link key={c.id} href={`/post/${c.postId}`} className="pcomment">
+            <div className="pc-ctx">re: ${symbol}</div>
+            <div className="pc-body">
+              {paragraphs(c.content).map((para, i) => (
+                <p key={i}>{para}</p>
+              ))}
+            </div>
+            <div className="pc-meta">
+              <span className="up">▲ {c.upCount ?? 0}</span>
+              {" · "}
+              <TokenChip kind={c.badgeKind} />
+              {" · "}
+              <span>{timeAgo(c.createdAt)}</span>
+            </div>
+          </Link>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
 function NotFound({ handle }: { handle: string }) {
   return (
-    <div className="scribble-card p-10 text-center">
-      <h1 className="text-[20px] font-semibold text-text">No such handle</h1>
-      <p className="mt-2 text-[13px] text-text-2">
-        Couldn&apos;t resolve <span className="font-numeric text-text">{handle}</span>. Check the
-        spelling, or it may have been released.
+    <div className="panel">
+      <div className="panel-h">
+        <span>No such handle</span>
+      </div>
+      <p className="panel-sub">
+        Couldn&apos;t resolve <b>{handle}</b>. Check the spelling, or it may have been released.
       </p>
     </div>
-  );
-}
-
-function BackIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M13 8H3M7 4L3 8l4 4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

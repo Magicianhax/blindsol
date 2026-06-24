@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { api, type Comment } from "@/lib/api";
-import { tokenFor } from "@/lib/tokens";
-import { TokenIcon } from "./token-icon";
-import { HoloSeal } from "./holo-seal";
+import { timeAgo, paragraphs } from "@/lib/format";
+import { netScore } from "@/lib/scoring";
 import { useBadge } from "./badge-context";
 import { ClaimDialog } from "./claim-dialog";
 
@@ -15,217 +14,279 @@ interface Props {
   onCommentPosted?: () => void;
 }
 
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return "just now";
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
-  return `${Math.floor(ms / 86_400_000)}d ago`;
+/**
+ * Warm-editorial comment thread. Presentation-only restyle of the original:
+ * the data flow (useBadge, api.createComment, api.reactComment, the parentId
+ * tree) is untouched. Voting is surfaced as upvote-only — a single ▲ with the
+ * net score — matching the BlindSol forum design. Replies nest to any depth via
+ * the recursive <Reply> component (`.kids .kids` indents).
+ */
+export function CommentThread({ postId, comments, onCommentPosted }: Props) {
+  const { badge, active } = useBadge();
+  const [claiming, setClaiming] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [rootText, setRootText] = useState("");
+  const [rootErr, setRootErr] = useState<string | null>(null);
+
+  const childrenOf = (id: string | null) =>
+    comments.filter((c) => c.parentId === id);
+  const top = childrenOf(null);
+  const meId = active?.anonId ?? null;
+
+  async function postReply(content: string, parentId?: string): Promise<boolean> {
+    if (!badge) {
+      setRootErr("Claim a badge to reply");
+      return false;
+    }
+    const text = content.trim();
+    if (!text) return false;
+    await api.createComment(badge.badgeToken, postId, text, parentId);
+    onCommentPosted?.();
+    return true;
+  }
+
+  async function submitRoot() {
+    if (!rootText.trim() || posting) return;
+    setPosting(true);
+    setRootErr(null);
+    try {
+      const ok = await postReply(rootText);
+      if (ok) setRootText("");
+    } catch (e) {
+      setRootErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  return (
+    <section>
+      {claiming && <ClaimDialog onClose={() => setClaiming(false)} />}
+
+      <h2 className="cmthead">
+        {comments.length} {comments.length === 1 ? "comment" : "comments"}
+      </h2>
+
+      {badge ? (
+        <form
+          className="compose inline"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitRoot();
+          }}
+        >
+          <textarea
+            className="cta-ta"
+            value={rootText}
+            onChange={(e) => setRootText(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            placeholder="Add to the conversation…"
+          />
+          {rootErr && <p className="nocmt">{rootErr}</p>}
+          <div className="cbar">
+            <span className="as">as {badge.anonId ?? badge.kind}</span>
+            <div className="cact">
+              <button
+                type="submit"
+                className="btn solid"
+                disabled={posting || !rootText.trim()}
+              >
+                {posting ? "Posting…" : "Reply"}
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : (
+        <div className="compose card">
+          <p className="cstat">
+            Claim a badge for any token you hold to reply anonymously.
+          </p>
+          <div className="cact">
+            <button className="btn solid" onClick={() => setClaiming(true)}>
+              Claim a badge
+            </button>
+          </div>
+        </div>
+      )}
+
+      {top.length === 0 ? (
+        <p className="nocmt">No replies yet. Be the first to push back.</p>
+      ) : (
+        <div className="kids">
+          {top.map((c) => (
+            <Reply
+              key={c.id}
+              comment={c}
+              postId={postId}
+              meId={meId}
+              childrenOf={childrenOf}
+              onReply={postReply}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
-export function CommentThread({ postId, comments, onCommentPosted }: Props) {
+function Reply({
+  comment,
+  postId,
+  meId,
+  childrenOf,
+  onReply,
+}: {
+  comment: Comment;
+  postId: string;
+  meId: string | null;
+  childrenOf: (id: string | null) => Comment[];
+  onReply: (content: string, parentId?: string) => Promise<boolean>;
+}) {
   const { badge } = useBadge();
-  const [text, setText] = useState("");
-  const [replyTo, setReplyTo] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [claiming, setClaiming] = useState(false);
+  const kids = childrenOf(comment.id);
+  const isMe = !!meId && meId === comment.authorAnonId;
 
-  async function submit() {
-    if (!badge) {
-      setErr("Claim a badge to reply");
-      return;
-    }
-    if (!text.trim()) return;
+  const [score, setScore] = useState(
+    netScore({ upCount: comment.upCount, downCount: comment.downCount }),
+  );
+  const [voted, setVoted] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function upvote() {
+    if (!badge || busy || voted) return;
     setBusy(true);
-    setErr(null);
     try {
-      await api.createComment(badge.badgeToken, postId, text.trim(), replyTo ?? undefined);
-      setText("");
-      setReplyTo(null);
-      onCommentPosted?.();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      const r = await api.reactComment(badge.badgeToken, comment.id, "up");
+      if (r.created) {
+        setScore((n) => n + 1);
+        setVoted(true);
+      }
+    } catch {
+      // swallow — a failed vote leaves the count unchanged
     } finally {
       setBusy(false);
     }
   }
 
-  const top = comments.filter((c) => !c.parentId);
-  const childrenOf = (id: string) => comments.filter((c) => c.parentId === id);
-  const symbol = badge ? tokenFor(badge.kind)?.symbol ?? badge.kind : null;
+  async function submit() {
+    if (!text.trim() || posting) return;
+    setPosting(true);
+    setErr(null);
+    try {
+      const ok = await onReply(text, comment.id);
+      if (ok) {
+        setText("");
+        setOpen(false);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPosting(false);
+    }
+  }
 
   return (
-    <section className="space-y-4">
-      {claiming && <ClaimDialog onClose={() => setClaiming(false)} />}
+    <div className="reply">
+      <div className="rline">
+        <button
+          className={`vote${voted ? " on" : ""}`}
+          onClick={upvote}
+          disabled={busy || !badge || voted}
+          title={badge ? "upvote" : "claim a badge to vote"}
+          aria-label="upvote"
+        >
+          <span className="tri">▲</span>
+          <span className="vn">{score}</span>
+        </button>
 
-      {badge ? (
-        <div className="scribble-card p-4">
-          {replyTo && (
-            <div className="mb-2 flex items-center justify-between text-[12px] text-muted">
-              <span>
-                Replying to <span className="font-numeric text-text-2">{replyTo.slice(0, 8)}</span>
-              </span>
-              <button
-                onClick={() => setReplyTo(null)}
-                className="text-[12px] transition hover:text-acid"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-          <div className="flex items-start gap-3">
-            <HoloSeal hash={badge.anonId ?? badge.kind} size={28} />
-            <div className="flex-1">
+        <div className="rbody">
+          <div className="rmeta">
+            <Link className="by" href={`/u/${comment.authorAnonId}`}>
+              {comment.displayName ? `@${comment.displayName}` : comment.authorAnonId}
+              {isMe && <span className="tagyou"> you</span>}
+            </Link>{" "}
+            · <span>{timeAgo(comment.createdAt)}</span>
+          </div>
+
+          <div className="rtext">
+            {paragraphs(comment.content).map((p, i) => (
+              <p key={i} className="preserve-line">
+                {p}
+              </p>
+            ))}
+          </div>
+
+          <div className="ract">
+            <button className="link" onClick={() => setOpen((v) => !v)}>
+              reply
+            </button>
+          </div>
+
+          {open && badge && (
+            <form
+              className="compose inline"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submit();
+              }}
+            >
               <textarea
+                className="cta-ta"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 rows={3}
                 maxLength={2000}
-                placeholder={`Reply as $${symbol}…`}
-                className="w-full resize-none border-0 bg-transparent text-[13px] leading-relaxed text-text placeholder:text-muted-2 focus:outline-none"
+                placeholder="Reply…"
+                autoFocus
               />
-              {err && (
-                <div className="mt-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-1.5 text-[12px] text-danger">
-                  {err}
+              {err && <p className="nocmt">{err}</p>}
+              <div className="cbar">
+                <span className="as">as {badge.anonId ?? badge.kind}</span>
+                <div className="cact">
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => {
+                      setOpen(false);
+                      setText("");
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn solid"
+                    disabled={posting || !text.trim()}
+                  >
+                    {posting ? "Posting…" : "Reply"}
+                  </button>
                 </div>
-              )}
-              <div className="mt-2 flex items-center justify-end border-t border-line pt-2">
-                <button
-                  onClick={submit}
-                  disabled={busy || !text.trim()}
-                  className="scribble-btn scribble-btn--primary"
-                >
-                  {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-bg/40 border-t-bg" />}
-                  {busy ? "Posting…" : "Reply"}
-                </button>
               </div>
-            </div>
-          </div>
+            </form>
+          )}
         </div>
-      ) : (
-        <div className="scribble-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-          <div className="min-w-0 flex-1">
-            <div className="text-[14px] font-medium text-text">Join the conversation</div>
-            <p className="mt-1 text-[12px] leading-relaxed text-text-2">
-              Claim a badge for any token you hold and reply anonymously.
-            </p>
-          </div>
-          <button
-            onClick={() => setClaiming(true)}
-            className="scribble-btn scribble-btn--primary whitespace-nowrap"
-          >
-            Claim a badge
-          </button>
-        </div>
-      )}
-
-      <div>
-        <h2 className="mb-3 text-[13px] text-muted">
-          <span className="font-numeric text-text-2">{comments.length}</span>{" "}
-          {comments.length === 1 ? "reply" : "replies"} · sorted by score
-        </h2>
-        {top.length === 0 ? (
-          <div className="scribble-card-flat px-4 py-8 text-center text-[13px] text-muted">
-            No replies yet. Be the first.
-          </div>
-        ) : (
-          <ul className="scribble-card overflow-hidden">
-            {top.map((c) => (
-              <li key={c.id} className="border-b border-line last:border-b-0">
-                <CommentNode comment={c} children={childrenOf(c.id)} onReply={() => setReplyTo(c.id)} />
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
-    </section>
-  );
-}
 
-function CommentNode({
-  comment,
-  children,
-  onReply,
-}: {
-  comment: Comment;
-  children: Comment[];
-  onReply: () => void;
-}) {
-  const meta = tokenFor(comment.badgeKind);
-  const symbol = meta ? meta.symbol : comment.badgeKind;
-
-  return (
-    <div className="p-4">
-      <header className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
-        <HoloSeal hash={comment.authorAnonId} size={16} />
-        <Link
-          href={`/u/${comment.authorAnonId}`}
-          className="rounded px-0.5 transition hover:text-acid"
-        >
-          {comment.displayName ? (
-            <span className="font-medium text-text">@{comment.displayName}</span>
-          ) : (
-            <span className="font-numeric text-[12px] text-text-2">{comment.authorAnonId}</span>
-          )}
-        </Link>
-        <span className="text-muted-2">·</span>
-        <span className="scribble-chip" style={{ padding: "2px 6px 2px 4px", fontSize: 11 }}>
-          <TokenIcon kind={comment.badgeKind} size={12} />
-          <span>${symbol}</span>
-        </span>
-        <span className="text-muted-2">·</span>
-        <span>{timeAgo(comment.createdAt)}</span>
-        <button
-          onClick={onReply}
-          className="ml-auto rounded px-2 py-0.5 text-[13px] transition hover:text-acid"
-        >
-          Reply
-        </button>
-      </header>
-      <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text">
-        {comment.content}
-      </p>
-
-      {children.length > 0 && (
-        <ul className="mt-3 space-y-2 border-l border-line pl-4">
-          {children.map((child) => (
-            <li key={child.id}>
-              <ChildComment comment={child} />
-            </li>
+      {kids.length > 0 && (
+        <div className="kids">
+          {kids.map((child) => (
+            <Reply
+              key={child.id}
+              comment={child}
+              postId={postId}
+              meId={meId}
+              childrenOf={childrenOf}
+              onReply={onReply}
+            />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );
 }
-
-function ChildComment({ comment }: { comment: Comment }) {
-  const meta = tokenFor(comment.badgeKind);
-  const symbol = meta ? meta.symbol : comment.badgeKind;
-  return (
-    <div className="rounded-lg border border-line bg-bg-2 px-3 py-2">
-      <header className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
-        <HoloSeal hash={comment.authorAnonId} size={14} />
-        <Link
-          href={`/u/${comment.authorAnonId}`}
-          className="rounded px-0.5 transition hover:text-acid"
-        >
-          {comment.displayName ? (
-            <span className="font-medium text-text">@{comment.displayName}</span>
-          ) : (
-            <span className="font-numeric text-[12px] text-text-2">{comment.authorAnonId}</span>
-          )}
-        </Link>
-        <span className="text-muted-2">·</span>
-        <span className="text-[12px] text-text-2">${symbol}</span>
-        <span className="text-muted-2">·</span>
-        <span>{timeAgo(comment.createdAt)}</span>
-      </header>
-      <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-text">
-        {comment.content}
-      </p>
-    </div>
-  );
-}
-

@@ -52,16 +52,16 @@ const config: Config = {
         "crayon-orange": "var(--crayon-orange)",
       },
       fontFamily: {
-        // Clean sans everywhere — the heavily-used `font-mono` utility now
-        // resolves to the sans stack so existing markup converts for free.
-        sans: ["var(--font-sans)", "-apple-system", "system-ui", "sans-serif"],
-        display: ["var(--font-sans)", "-apple-system", "system-ui", "sans-serif"],
-        body: ["var(--font-sans)", "-apple-system", "system-ui", "sans-serif"],
-        mono: ["var(--font-sans)", "-apple-system", "system-ui", "sans-serif"],
-        scribble: ["var(--font-sans)", "-apple-system", "system-ui", "sans-serif"],
-        // Real monospace — opt-in for hashes, anon ids, wallets, vote counts.
-        numeric: ["var(--font-mono-real)", "JetBrains Mono", "ui-monospace", "SF Mono", "Menlo", "monospace"],
-        "mono-real": ["var(--font-mono-real)", "JetBrains Mono", "ui-monospace", "monospace"],
+        // Editorial type system — system stacks, no web fonts. Serif for
+        // headings/prose, sans for UI chrome, monospace for meta/labels.
+        sans: ["var(--sans)"],
+        body: ["var(--sans)"],
+        scribble: ["var(--sans)"],
+        serif: ["var(--serif)"],
+        display: ["var(--serif)"],
+        mono: ["var(--mono)"],
+        numeric: ["var(--mono)"],
+        "mono-real": ["var(--mono)"],
       },
       boxShadow: {
         pen: "var(--pen-shadow)",

@@ -2,17 +2,21 @@
 
 import Link from "next/link";
 import { TopNav } from "@/components/top-nav";
+import { SiteFooter } from "@/components/site-footer";
 
 export default function AboutPage() {
   return (
     <>
       <TopNav active="about" />
-      <main className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
-        <header className="mb-6 sm:mb-8">
-          <h1 className="text-4xl font-semibold leading-tight text-text sm:text-5xl">
+      <main className="bs-main">
+        <header className="mb-8 sm:mb-10">
+          <p className="font-mono text-[12px] uppercase tracking-[0.18em] text-muted">
+            About
+          </p>
+          <h1 className="mt-2 font-serif text-[clamp(30px,5vw,40px)] font-bold leading-[1.1] tracking-tight text-text">
             About BlindSol
           </h1>
-          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted sm:mt-4 sm:text-[17px]">
+          <p className="mt-4 max-w-2xl text-[15px] leading-[1.6] text-muted">
             A tiny anonymous forum where verified token holders talk about the bags they hold.
             Built for Colosseum&apos;s MagicBlock Privacy Track.
           </p>
@@ -62,7 +66,7 @@ export default function AboutPage() {
             </ListStep>
             <ListStep n="3" label="TEE verifies you hold, issues an anon handle">
               Inside the trusted enclave, the server checks the on-chain balance, derives an
-              anonymous handle as <span className="font-numeric">HMAC(perSecret, wallet || kind)</span>,
+              anonymous handle as <span className="font-mono text-[13px]">HMAC(perSecret, wallet || kind)</span>,
               mints an on-chain Badge account, and signs a session token. The wallet ↔ handle link{" "}
               <em>never leaves the enclave.</em>
             </ListStep>
@@ -118,7 +122,7 @@ export default function AboutPage() {
           <p>
             The interesting bit is the identity derivation. We compute:
           </p>
-          <pre className="mt-3 overflow-x-auto rounded-lg border border-line bg-bg-2 p-4 font-numeric text-sm leading-relaxed text-text">
+          <pre className="mt-3 overflow-x-auto rounded-[6px] border border-line bg-surface p-4 font-mono text-[13px] leading-relaxed text-text">
 {`anonSeed = HMAC-SHA256(perSecret, wallet || badgeKind)
 anonId   = base32(anonSeed)[:12]`}
           </pre>
@@ -133,8 +137,8 @@ anonId   = base32(anonSeed)[:12]`}
             </BulletPoint>
             <BulletPoint>
               <span className="font-semibold text-text">unlinkable</span> — without{" "}
-              <code className="font-numeric text-sm">perSecret</code> (which lives only inside the
-              TEE), nobody can go from <code className="font-numeric text-sm">anonId</code> back to
+              <code className="font-mono text-[13px]">perSecret</code> (which lives only inside the
+              TEE), nobody can go from <code className="font-mono text-[13px]">anonId</code> back to
               the wallet. Not us. Not a database leak. Not a subpoena to our cloud provider.
             </BulletPoint>
             <BulletPoint>
@@ -150,7 +154,7 @@ anonId   = base32(anonSeed)[:12]`}
           <ul className="space-y-3">
             <BulletPoint>
               <strong className="font-semibold text-text">Postgres (Neon):</strong> posts, comments,
-              reactions, audit events. Every row uses <code className="font-numeric text-sm">anon_id</code>{" "}
+              reactions, audit events. Every row uses <code className="font-mono text-[13px]">anon_id</code>{" "}
               — <em>never</em> a wallet address. If our DB leaked tomorrow, it would expose anon
               handles and post content; not who anyone is.
             </BulletPoint>
@@ -163,7 +167,7 @@ anonId   = base32(anonSeed)[:12]`}
             <BulletPoint>
               <strong className="font-semibold text-text">Anchor badge registry (devnet today):</strong>{" "}
               an on-chain registry of badge mints, so anyone can audit how many badges have been
-              issued. Each row stores <code className="font-numeric text-sm">(kind, sha256(anonSeed),
+              issued. Each row stores <code className="font-mono text-[13px]">(kind, sha256(anonSeed),
               index, ts)</code> — never the issuer wallet. After mint, ownership of the Badge
               account is handed to MagicBlock&apos;s Delegation program; further mutations happen
               inside the rollup.
@@ -201,7 +205,7 @@ anonId   = base32(anonSeed)[:12]`}
         {/* Tech stack */}
         <Section title="The stack">
           <div className="grid gap-3 sm:grid-cols-2">
-            <StackCard label="Frontend" items={["Next.js 15 (App Router)", "Tailwind CSS", "Solana Wallet Adapter", "Patrick Hand + Caveat fonts"]} />
+            <StackCard label="Frontend" items={["Next.js 15 (App Router)", "Tailwind CSS", "Solana Wallet Adapter", "System serif (Georgia) + monospace"]} />
             <StackCard label="Backend" items={["Express", "Drizzle ORM", "Neon Postgres", "ed25519 attestations"]} />
             <StackCard label="Privacy" items={["MagicBlock Private Ephemeral Rollup", "MagicBlock Private Payments", "TEE-attested badge issuance", "HMAC-derived anon IDs"]} />
             <StackCard label="On-chain" items={["Solana mainnet", "Anchor badge_registry program", "Helius RPC", "Phantom wallet"]} />
@@ -219,18 +223,16 @@ anonId   = base32(anonSeed)[:12]`}
           </ul>
         </Section>
 
-        <div className="mt-10 flex justify-center">
-          <Link href="/" className="scribble-btn scribble-btn--primary">
-            Back to threads
+        <div className="mt-10">
+          <Link
+            href="/forum"
+            className="font-mono text-[12px] uppercase tracking-[0.14em] text-acid transition hover:opacity-80"
+          >
+            ← Back to the forum
           </Link>
         </div>
 
-        <footer className="mt-10 border-t border-line pt-4 text-[13px] text-muted">
-          <p>
-            BlindSol v0.1 · mainnet beta. Built clumsily and lovingly for the MagicBlock Privacy
-            Track. If you&apos;re reading this you&apos;re the kind of nerd we built it for.
-          </p>
-        </footer>
+        <SiteFooter />
       </main>
     </>
   );
@@ -246,13 +248,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-6 sm:mb-8">
-      <h2 className="mb-3 text-2xl font-semibold leading-tight text-text sm:text-3xl">
+    <section className="mb-8 sm:mb-10">
+      <h2 className="mb-3 font-serif text-[clamp(22px,3.5vw,26px)] font-bold leading-tight tracking-tight text-text">
         {title}
       </h2>
-      <div className="rounded-xl border border-line bg-bg px-4 py-4 text-[14px] leading-relaxed text-muted shadow-sm sm:px-5 sm:py-5 sm:text-[15px]">
-        {children}
-      </div>
+      <div className="text-[15px] leading-[1.6] text-muted">{children}</div>
     </section>
   );
 }
@@ -260,12 +260,12 @@ function Section({
 function ListStep({ n, label, children }: { n: string; label: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-bg-3 text-[15px] font-semibold leading-none text-text">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-surface font-mono text-[13px] leading-none text-acid">
         {n}
       </span>
       <div className="min-w-0 flex-1">
         <div className="text-[15px] font-semibold leading-tight text-text">{label}</div>
-        <p className="mt-1 leading-snug">{children}</p>
+        <p className="mt-1 leading-[1.6]">{children}</p>
       </div>
     </li>
   );
@@ -275,7 +275,7 @@ function BulletItem({ label, children }: { label: string; children: React.ReactN
   return (
     <li>
       <div className="text-[15px] font-semibold leading-tight text-text">{label}</div>
-      <p className="mt-1 leading-snug">{children}</p>
+      <p className="mt-1 leading-[1.6]">{children}</p>
     </li>
   );
 }
@@ -291,12 +291,12 @@ function BulletPoint({ children }: { children: React.ReactNode }) {
 
 function StackCard({ label, items }: { label: string; items: string[] }) {
   return (
-    <div className="rounded-xl border border-line bg-bg p-3 shadow-sm">
-      <div className="text-[15px] font-semibold leading-none text-text">{label}</div>
-      <ul className="mt-2 space-y-1 text-sm text-muted">
+    <div className="rounded-[6px] border border-line bg-surface p-4">
+      <div className="font-mono text-[12px] uppercase tracking-[0.14em] text-muted">{label}</div>
+      <ul className="mt-2 space-y-1 text-[14px] text-text">
         {items.map((it) => (
           <li key={it} className="flex gap-2">
-            <span className="select-none text-muted-2">·</span>
+            <span className="select-none text-acid">·</span>
             <span>{it}</span>
           </li>
         ))}
@@ -312,7 +312,7 @@ function LinkRow({ href, label }: { href: string; label: string }) {
         href={href}
         target="_blank"
         rel="noreferrer"
-        className="inline-block rounded px-1 font-medium text-acid transition hover:bg-acid-soft"
+        className="inline-block font-medium text-acid transition hover:opacity-80"
       >
         {label}
       </a>

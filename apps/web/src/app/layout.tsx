@@ -1,32 +1,47 @@
-import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import { Providers } from "@/components/providers";
 import { MobileTabBar } from "@/components/mobile-tab-bar";
+import { SITE } from "@/lib/site";
 import "./globals.css";
 
-// Clean sans for the whole UI; a real monospace stays available for hashes,
-// anon ids, wallet strings and vote counts via the `numeric` utility.
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-sans",
-  display: "swap",
-});
+// The editorial theme uses only system font stacks (Georgia serif / system
+// sans / monospace), declared as CSS variables in globals.css — so there are
+// no web fonts to load here.
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-mono-real",
-  display: "swap",
-});
+const TITLE = "BlindSol — talk freely, stay unseen";
+const DESCRIPTION =
+  "The anonymous forum for Solana. Prove you hold the token to post, but never show which wallet — verified and anonymous at once.";
 
 export const metadata: Metadata = {
-  title: "BlindSol — anonymous forums for Solana token holders",
-  description: "Talk about the tokens you hold without showing your wallet. Settled privately through MagicBlock.",
+  metadataBase: new URL(SITE.url),
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: SITE.name,
   icons: {
-    icon: "/icon.png",
-    apple: "/apple-icon.png",
+    icon: SITE.logo,
+    apple: SITE.logo,
   },
+  openGraph: {
+    type: "website",
+    siteName: SITE.name,
+    title: TITLE,
+    description: DESCRIPTION,
+    url: SITE.url,
+    images: [{ url: SITE.logo, alt: SITE.name }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [SITE.logo],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#15140f" },
+  ],
 };
 
 // No-flash theme initializer. Runs synchronously at the top of <body> before
@@ -37,12 +52,7 @@ const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('blindsol_
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
-      data-theme="light"
-      suppressHydrationWarning
-    >
+    <html lang="en" data-theme="light" suppressHydrationWarning>
       <body className="antialiased">
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <Providers>

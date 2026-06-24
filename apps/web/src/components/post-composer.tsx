@@ -8,21 +8,26 @@ import { api } from "@/lib/api";
 import { getConnection } from "@/lib/solana";
 import { useBadge } from "./badge-context";
 import { ClaimDialog } from "./claim-dialog";
+import { TokenIcon } from "./token-icon";
 import { tokenFor } from "@/lib/tokens";
 
 type Stage = "idle" | "preparing" | "signing" | "confirming" | "finalizing";
 
+const MAX_TITLE_LENGTH = 160;
+const MAX_BODY_LENGTH = 2000;
+
 const stageCopy: Record<Stage, string> = {
-  idle: "Post",
-  preparing: "Preparing…",
-  signing: "Approve in wallet…",
-  confirming: "Confirming…",
-  finalizing: "Posting…",
+  idle: "post thread",
+  preparing: "preparing…",
+  signing: "approve in wallet…",
+  confirming: "confirming…",
+  finalizing: "posting…",
 };
 
 export function PostComposer({
   onPosted,
   requiredKind,
+  defaultOpen = false,
 }: {
   onPosted?: () => void;
   /**
@@ -31,82 +36,61 @@ export function PostComposer({
    * the composer locks itself if they don't own a matching badge.
    */
   requiredKind?: string;
+  /** Open the composer form immediately (used by the "+ new thread" entry). */
+  defaultOpen?: boolean;
 }) {
-  const { badge, badges } = useBadge();
+  const { badge, badges, setActive } = useBadge();
   const { authenticated } = usePrivy();
   const { wallets } = useWallets();
   const { signTransaction } = useSignTransaction();
   const wallet = wallets[0];
   const connection = getConnection();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
   const [err, setErr] = useState<string | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
 
-  // Claim-prompt with a pre-selected token (rendered alongside any composer state).
-  const claimDialog = claiming ? (
-    <ClaimDialog onClose={() => setClaiming(null)} preselectKind={claiming} />
-  ) : null;
+  const claimDialog =
+    claiming !== null ? (
+      <ClaimDialog onClose={() => setClaiming(null)} preselectKind={claiming || undefined} />
+    ) : null;
 
-  // First-time visitors with no badges at all → friendly invite.
+  // First-time visitors with no badges at all → the gate. Token-specific when a
+  // room is in focus, otherwise a general "claim a badge to post" gate.
   if (badges.length === 0) {
-    const target = requiredKind ?? "jup_holder";
-    const meta = tokenFor(target);
-    const symbol = meta?.symbol ?? target;
+    if (requiredKind) {
+      return (
+        <>
+          {claimDialog}
+          <Gate kind={requiredKind} onUnseal={() => setClaiming(requiredKind)} />
+        </>
+      );
+    }
     return (
       <>
         {claimDialog}
-        <CallToAction
-          title="Claim a badge to start posting"
-          body={
-            <>
-              Pick a community whose token you actually hold. We check on-chain, then hand you an
-              anonymous identity tied to that bag — never to your wallet.
-            </>
-          }
-          actionLabel={requiredKind ? `Claim $${symbol}` : "Pick a badge"}
-          onAction={() => setClaiming(target)}
-        />
+        <Gate onUnseal={() => setClaiming("")} />
       </>
     );
   }
 
-  // Filter to a community the user does NOT hold a badge for.
+  // Filtered to a community the user does NOT hold a badge for → the gate.
   if (requiredKind && !badges.some((b) => b.kind === requiredKind)) {
-    const meta = tokenFor(requiredKind);
-    const symbol = meta?.symbol ?? requiredKind;
     return (
       <>
         {claimDialog}
-        <CallToAction
-          title={`You don’t hold $${symbol}`}
-          body={
-            <>
-              This community is for verified <span className="font-semibold text-text">${symbol}</span>{" "}
-              holders. Claim a $<span>{symbol}</span> badge to post here, or browse the rest of the feed under one
-              of your existing badges.
-            </>
-          }
-          actionLabel={`Claim $${symbol}`}
-          onAction={() => setClaiming(requiredKind)}
-        />
+        <Gate kind={requiredKind} onUnseal={() => setClaiming(requiredKind)} />
       </>
     );
   }
 
   if (!badge) {
-    // Defensive: badges.length>0 but no active selected. Shouldn't normally happen.
     return (
       <>
         {claimDialog}
-        <CallToAction
-          title="Pick a badge to post under"
-          body="You have badges in your purse — switch to one in the header dropdown."
-          actionLabel="Claim another"
-          onAction={() => setClaiming(requiredKind ?? "jup_holder")}
-        />
+        <Gate kind={requiredKind} onUnseal={() => setClaiming(requiredKind ?? "")} />
       </>
     );
   }
@@ -114,18 +98,22 @@ export function PostComposer({
     return (
       <>
         {claimDialog}
-        <Notice title="Connect your wallet to post">
-          Your wallet stays in the enclave — only the badge gets attached to what you say.
-        </Notice>
+        <div className="compose card">
+          <div className="bname compose-notice-title">Connect your wallet to post</div>
+          <p className="panel-sub compose-notice-sub">
+            Your wallet stays in the enclave — only the badge gets attached to what you say.
+          </p>
+        </div>
       </>
     );
   }
 
   const meta = tokenFor(badge.kind);
+  const symbol = meta?.symbol ?? badge.kind;
   const trimmedTitle = title.trim();
   const trimmedBody = body.trim();
-  const remainingTitle = 160 - trimmedTitle.length;
-  const remainingBody = 2000 - trimmedBody.length;
+  const remainingTitle = MAX_TITLE_LENGTH - trimmedTitle.length;
+  const remainingBody = MAX_BODY_LENGTH - trimmedBody.length;
   const overLimit = remainingTitle < 0 || remainingBody < 0;
   const canSubmit = trimmedTitle.length > 0 && !overLimit;
   const busy = stage !== "idle";
@@ -150,8 +138,6 @@ export function PostComposer({
         transaction: txBytes,
         wallet,
       });
-      // Privy returns the signed tx as raw bytes; deserialize to a
-      // VersionedTransaction just to validate, then send the bytes directly.
       VersionedTransaction.deserialize(signedTransaction);
       setStage("confirming");
       const signature = await connection.sendRawTransaction(signedTransaction, { skipPreflight: false });
@@ -183,120 +169,147 @@ export function PostComposer({
 
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="flex w-full items-center gap-3 rounded-lg border border-line bg-bg px-3 py-2 text-left transition hover:border-line-2"
-      >
-        <span className="flex-1 truncate text-[13px] text-muted">
-          Post to <span className="font-medium text-text-2">${meta?.symbol ?? badge.kind}</span>…
-        </span>
-        <span className="scribble-btn scribble-btn--primary pointer-events-none px-2.5 py-1 text-[12px]">
-          New post
-        </span>
-      </button>
+      <>
+        {claimDialog}
+        <button
+          onClick={() => setOpen(true)}
+          className="compose card compose-collapsed"
+        >
+          <span className="compose-collapsed__label">
+            Start a thread in <b>${symbol}</b>…
+          </span>
+          <span className="btn solid pointer-events-none">+ new thread</span>
+        </button>
+      </>
+    );
+  }
+
+  // held communities the user can post into (their badges)
+  const postable = badges.filter((b, i, arr) => arr.findIndex((x) => x.kind === b.kind) === i);
+
+  return (
+    <>
+      {claimDialog}
+      <div className="compose card">
+        <div className="crow">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="A claim worth arguing with, or a real question"
+            disabled={busy}
+            maxLength={MAX_TITLE_LENGTH}
+            className="cin"
+            autoComplete="off"
+          />
+        </div>
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Say the thing. Plain text. Be specific."
+          disabled={busy}
+          maxLength={MAX_BODY_LENGTH}
+          className="cta-ta"
+        />
+
+        {err && (
+          <div className="mt-2 rounded border border-danger/30 bg-danger/5 px-3 py-2 text-[13px] text-danger">
+            Error: {err}
+          </div>
+        )}
+
+        <div className="cbar">
+          <label className="sel">
+            room{" "}
+            <select
+              value={badge.kind}
+              disabled={busy || postable.length < 2}
+              onChange={(e) => {
+                const next = badges.find((b) => b.kind === e.target.value);
+                if (next) setActive(next.badgeId);
+              }}
+            >
+              {postable.map((b) => {
+                const m = tokenFor(b.kind);
+                return (
+                  <option key={b.badgeId} value={b.kind}>
+                    ${m?.symbol ?? b.kind}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+          <span className="as">
+            {remainingTitle < 0 || remainingBody < 0 ? (
+              <span className="compose-status--over">over limit</span>
+            ) : (
+              "verified holder · wallet sealed"
+            )}
+          </span>
+          <span className="cact">
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={busy}
+              onClick={() => {
+                setOpen(false);
+                setTitle("");
+                setBody("");
+                setErr(null);
+              }}
+            >
+              cancel
+            </button>
+            <button type="button" className="btn solid" disabled={busy || !canSubmit} onClick={submit}>
+              {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+              {stageCopy[stage]}
+            </button>
+          </span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The sealed-room gate — shown when the user can't post in the current room.
+ * With a `kind` it's token-specific; without one it's the general "claim a
+ * badge to post" gate (the all-rooms, no-badge state). Wired to the real claim
+ * flow via `onUnseal`.
+ */
+function Gate({ kind, onUnseal }: { kind?: string; onUnseal: () => void }) {
+  const meta = kind ? tokenFor(kind) : undefined;
+  const symbol = meta?.symbol ?? kind;
+
+  if (!kind) {
+    return (
+      <div className="gate">
+        <div className="gate-coin">🔒</div>
+        <div className="gate-lk">sealed forum</div>
+        <h1>Claim a badge to post</h1>
+        <p className="greq">
+          BlindSol is for verified token holders. Pick a community whose token you actually hold —
+          we check on-chain, then hand you an anonymous identity tied to the bag, never to your wallet.
+        </p>
+        <button className="btn solid" onClick={onUnseal}>
+          Pick a badge &amp; claim
+        </button>
+      </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-line bg-bg p-3.5">
-      <div className="mb-2 flex flex-wrap items-center gap-x-1.5 border-b border-line pb-2 text-[12px] text-muted">
-        Posting to <span className="font-medium text-text">${meta?.symbol ?? badge.kind}</span>
-        <span className="text-muted-2">·</span>
-        <span>verified holder, wallet sealed</span>
+    <div className="gate">
+      <div className="gate-coin gate-coin--bare">
+        <TokenIcon kind={kind} size={64} />
       </div>
-
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Title"
-        disabled={busy}
-        maxLength={160}
-        className="w-full border-0 bg-transparent py-1 text-[18px] font-semibold text-text placeholder:text-muted-2 focus:outline-none disabled:opacity-50"
-      />
-      <textarea
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
-        rows={5}
-        placeholder="Write your post… be specific, holders pay attention."
-        disabled={busy}
-        maxLength={2000}
-        className="mt-1 w-full resize-none border-0 bg-transparent text-[14px] leading-relaxed text-text-2 placeholder:text-muted-2 focus:outline-none disabled:opacity-50"
-      />
-
-      {err && (
-        <div className="mt-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-[13px] text-danger">
-          Error: {err}
-        </div>
-      )}
-
-      <div className="mt-3 flex items-center gap-3 border-t border-line pt-3">
-        <span
-          className={`font-numeric text-[12px] ${
-            remainingTitle < 0 ? "text-danger" : "text-muted-2"
-          }`}
-        >
-          {remainingTitle}
-        </span>
-        <span
-          className={`font-numeric text-[12px] ${
-            remainingBody < 0 ? "text-danger" : "text-muted-2"
-          }`}
-        >
-          {remainingBody}
-        </span>
-        <button
-          onClick={() => {
-            setOpen(false);
-            setTitle("");
-            setBody("");
-            setErr(null);
-          }}
-          disabled={busy}
-          className="ml-auto scribble-btn scribble-btn--ghost"
-        >
-          cancel
-        </button>
-        <button
-          onClick={submit}
-          disabled={busy || !canSubmit}
-          className="scribble-btn scribble-btn--primary"
-        >
-          {busy && <span className="h-3 w-3 animate-spin rounded-full border-2 border-bg/40 border-t-bg" />}
-          {stageCopy[stage]}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Notice({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl border border-line bg-bg p-4 shadow-sm">
-      <div className="text-[15px] font-semibold text-text">{title}</div>
-      <div className="mt-1.5 text-[13px] leading-relaxed text-muted">{children}</div>
-    </div>
-  );
-}
-
-function CallToAction({
-  title,
-  body,
-  actionLabel,
-  onAction,
-}: {
-  title: string;
-  body: React.ReactNode;
-  actionLabel: string;
-  onAction: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-xl border border-line bg-bg p-4 shadow-sm sm:flex-row sm:items-center">
-      <div className="min-w-0 flex-1">
-        <div className="text-[15px] font-semibold text-text">{title}</div>
-        <div className="mt-1.5 text-[13px] leading-relaxed text-muted">{body}</div>
-      </div>
-      <button onClick={onAction} className="scribble-btn scribble-btn--primary whitespace-nowrap">
-        {actionLabel}
+      <div className="gate-lk">🔒 sealed room</div>
+      <h1>${symbol} holders only</h1>
+      <p className="greq">
+        This room is for verified <b>${symbol}</b> holders. To unseal it, claim a <b>${symbol}</b> badge —
+        your seal proves the balance by signature, so your wallet and your identity stay private.
+      </p>
+      <button className="btn solid" onClick={onUnseal}>
+        Verify holdings &amp; unseal
       </button>
     </div>
   );

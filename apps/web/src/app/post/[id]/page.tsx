@@ -3,39 +3,19 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { TopNav } from "@/components/top-nav";
+import { RoomNav } from "@/components/room-nav";
 import { CommentThread } from "@/components/comment-thread";
-import { TokenIcon } from "@/components/token-icon";
-import { HoloSeal, VerifiedDot } from "@/components/holo-seal";
+import { TokenChip } from "@/components/token-chip";
+import { Seal } from "@/components/seal";
 import { useBadge } from "@/components/badge-context";
+import { SiteFooter } from "@/components/site-footer";
 import { tokenFor } from "@/lib/tokens";
+import { timeAgo, deriveTitle, paragraphs, titleAndBody } from "@/lib/format";
+import { netScore } from "@/lib/scoring";
 import { api, type Comment, type Post, type Reaction } from "@/lib/api";
 
 interface PageProps {
   params: Promise<{ id: string }>;
-}
-
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return "just now";
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
-  return `${Math.floor(ms / 86_400_000)}d ago`;
-}
-
-/** Legacy fallback for rows posted before the dedicated `title` column. */
-function deriveTitleAndBody(content: string): { title: string; body: string } {
-  const trimmed = content.trim();
-  const firstNewline = trimmed.indexOf("\n");
-  if (firstNewline > 0 && firstNewline < 200) {
-    return { title: trimmed.slice(0, firstNewline).trim(), body: trimmed.slice(firstNewline + 1).trim() };
-  }
-  if (trimmed.length <= 160) return { title: trimmed, body: "" };
-  return { title: "", body: trimmed };
-}
-
-function titleAndBody(post: Post): { title: string; body: string } {
-  if (post.title) return { title: post.title, body: post.content };
-  return deriveTitleAndBody(post.content);
 }
 
 export default function PostPage({ params }: PageProps) {
@@ -68,37 +48,45 @@ export default function PostPage({ params }: PageProps) {
   const upCount = reactions.filter((r) => r.kind === "up").length;
   const downCount = reactions.filter((r) => r.kind === "down").length;
 
+  const symbol = post ? tokenFor(post.badgeKind)?.symbol ?? post.badgeKind : null;
+
   return (
     <>
       <TopNav />
-      <main className="mx-auto max-w-3xl px-4 py-6">
+      <RoomNav activeRoom={post?.badgeKind} />
+      <main className="bs-main">
         <Link
-          href="/"
-          className="mb-5 inline-flex items-center gap-1.5 text-[13px] text-muted transition hover:text-text"
+          className="back"
+          href={post ? `/forum?room=${post.badgeKind}` : "/forum"}
         >
-          <BackIcon />
-          Back to feed
+          {symbol ? `← $${symbol}` : "← all rooms"}
         </Link>
 
-        {err && (
-          <div className="mb-4 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2.5 text-[13px] text-danger">
-            Error: {err}
-          </div>
-        )}
+        {err && <p className="nocmt">Error: {err}</p>}
 
-        {loading && !post && (
-          <div className="scribble-card p-10 text-center text-[13px] text-muted">
-            Loading…
-          </div>
-        )}
-
-        {post && <ThreadDetail post={post} upCount={upCount} downCount={downCount} onVoted={refresh} />}
+        {loading && !post && <p className="nocmt">Loading…</p>}
 
         {post && (
-          <div className="mt-6">
-            <CommentThread postId={post.id} comments={comments} onCommentPosted={refresh} />
+          <ThreadDetail
+            post={post}
+            commentCount={comments.length}
+            upCount={upCount}
+            downCount={downCount}
+            onVoted={refresh}
+          />
+        )}
+
+        {post && (
+          <div id="comments">
+            <CommentThread
+              postId={post.id}
+              comments={comments}
+              onCommentPosted={refresh}
+            />
           </div>
         )}
+
+        <SiteFooter />
       </main>
     </>
   );
@@ -106,140 +94,89 @@ export default function PostPage({ params }: PageProps) {
 
 function ThreadDetail({
   post,
+  commentCount,
   upCount,
   downCount,
   onVoted,
 }: {
   post: Post;
+  commentCount: number;
   upCount: number;
   downCount: number;
   onVoted: () => void;
 }) {
   const { badge } = useBadge();
-  const meta = tokenFor(post.badgeKind);
-  const symbol = meta ? meta.symbol : post.badgeKind;
+  const symbol = tokenFor(post.badgeKind)?.symbol ?? post.badgeKind;
   const { title, body } = titleAndBody(post);
-  const score = upCount - downCount;
-  const [busy, setBusy] = useState(false);
-  const [voteErr, setVoteErr] = useState<string | null>(null);
+  const headline = title || deriveTitle(post.content);
 
-  async function vote(kind: "up" | "down") {
-    if (!badge) {
-      setVoteErr("Claim a badge to vote");
-      return;
-    }
+  const [score, setScore] = useState(netScore({ upCount, downCount }));
+  const [voted, setVoted] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function upvote() {
+    if (!badge || busy || voted) return;
     setBusy(true);
-    setVoteErr(null);
     try {
-      await api.react(badge.badgeToken, post.id, kind);
-      onVoted();
-    } catch (e) {
-      setVoteErr(e instanceof Error ? e.message : String(e));
+      const r = await api.react(badge.badgeToken, post.id, "up");
+      if (r.created) {
+        setScore((n) => n + 1);
+        setVoted(true);
+      }
+    } catch {
+      // swallow — a failed vote leaves the count unchanged
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <article className="scribble-card p-6">
-      <header className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
-        <Link
-          href={`/?filter=${post.badgeKind}`}
-          className="text-text-2 transition hover:text-acid"
-        >
-          ← Back to ${symbol}
-        </Link>
-        <span className="text-muted-2">·</span>
-        <span className="scribble-chip" style={{ padding: "3px 8px 3px 5px" }}>
-          <TokenIcon kind={post.badgeKind} size={14} />
-          <span>${symbol}</span>
-        </span>
-        <span className="text-muted-2">·</span>
-        <HoloSeal hash={post.authorAnonId} size={20} />
-        <Link
-          href={`/u/${post.authorAnonId}`}
-          className="rounded px-0.5 transition hover:text-acid"
-        >
-          {post.displayName ? (
-            <span className="font-medium text-text">@{post.displayName}</span>
-          ) : (
-            <span className="font-numeric text-[12px] text-text-2">{post.authorAnonId}</span>
-          )}
-        </Link>
-        <VerifiedDot />
-        <span className="text-muted-2">·</span>
-        <span>{timeAgo(post.createdAt)}</span>
-      </header>
+    <article className="op">
+      <h1>{headline || "(empty post)"}</h1>
 
-      {title && (
-        <h1 className="mb-3 break-words text-[22px] font-semibold leading-snug tracking-tight text-text sm:text-[26px]">
-          {title}
-        </h1>
-      )}
+      <div className="opmeta">
+        <Seal hash={post.authorAnonId} size={30} />
+        <Link className="by" href={`/u/${post.authorAnonId}`}>
+          {post.displayName ? `@${post.displayName}` : post.authorAnonId}
+        </Link>{" "}
+        ·{" "}
+        <Link className="room" href={`/forum?room=${post.badgeKind}`}>
+          <TokenChip kind={post.badgeKind} />
+        </Link>{" "}
+        · <span>{timeAgo(post.createdAt)}</span>
+      </div>
+
       {body && (
-        <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-text-2">
-          {body}
-        </p>
-      )}
-      {!title && !body && (
-        <p className="text-[13px] text-muted">(empty post)</p>
+        <div className="optext">
+          {paragraphs(body).map((p, i) => (
+            <p key={i} className="preserve-line">
+              {p}
+            </p>
+          ))}
+        </div>
       )}
 
-      <footer className="mt-6 flex flex-wrap items-center gap-2 border-t border-line pt-4">
+      <div className="opact">
         <button
-          onClick={() => vote("up")}
-          disabled={busy || !badge}
-          className={`scribble-chip ${score > 0 ? "scribble-chip--active" : ""} hover:text-acid disabled:opacity-40`}
-          title={badge ? "Upvote" : "Claim a badge to vote"}
+          className={`vote${voted ? " on" : ""}`}
+          onClick={upvote}
+          disabled={busy || !badge || voted}
+          title={badge ? "upvote" : "claim a badge to vote"}
+          aria-label="upvote"
         >
-          <ArrowUpIcon /> <span className="font-numeric">{upCount}</span>
+          <span className="tri">▲</span>
+          <span className="vn">{score}</span>
         </button>
-        <button
-          onClick={() => vote("down")}
-          disabled={busy || !badge}
-          className={`scribble-chip ${score < 0 ? "scribble-chip--active" : ""} hover:text-text disabled:opacity-40`}
-          title={badge ? "Downvote" : "Claim a badge to vote"}
-        >
-          <ArrowDownIcon /> <span className="font-numeric">{downCount}</span>
-        </button>
-        <span className="ml-2 text-[13px] text-muted">
-          Score{" "}
-          <span
-            className={`font-numeric ${
-              score > 0 ? "text-acid" : score < 0 ? "text-text-2" : "text-muted"
-            }`}
-          >
-            {score > 0 ? `+${score}` : score}
-          </span>
+        <a className="link" href="#comments">
+          reply
+        </a>
+        <span className="cstat">
+          {commentCount} {commentCount === 1 ? "comment" : "comments"}
         </span>
-        {voteErr && (
-          <span className="ml-auto text-[13px] text-danger">{voteErr}</span>
+        {!badge && symbol && (
+          <span className="cstat">claim a ${symbol} badge to vote</span>
         )}
-      </footer>
+      </div>
     </article>
-  );
-}
-
-function BackIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M13 8H3M7 4L3 8l4 4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ArrowUpIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M3 9 L8 4 L13 9 M8 4 L8 14" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function ArrowDownIcon() {
-  return (
-    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M3 7 L8 12 L13 7 M8 12 L8 2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }
